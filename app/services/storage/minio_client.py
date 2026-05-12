@@ -8,12 +8,27 @@ from app.models.system_config import SystemConfig
 
 
 class MinioStorage:
+    def _clean_endpoint(self, endpoint: str) -> str:
+        endpoint = endpoint.strip()
+        if "://" in endpoint:
+            endpoint = endpoint.split("://", 1)[1]
+        if "/" in endpoint:
+            endpoint = endpoint.split("/", 1)[0]
+        return endpoint
+
     def _get_client(self, config: dict) -> Minio:
+        endpoint = self._clean_endpoint(config["endpoint"])
+        secure = config.get("secure", False)
+        raw = config["endpoint"].strip()
+        if raw.startswith("https://"):
+            secure = True
+        elif raw.startswith("http://"):
+            secure = False
         return Minio(
-            endpoint=config["endpoint"],
+            endpoint=endpoint,
             access_key=config["access_key"],
             secret_key=config["secret_key"],
-            secure=config.get("secure", False),
+            secure=secure,
         )
 
     async def _load_config(self, db_session) -> dict | None:

@@ -3,7 +3,6 @@ import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import Column, String, Integer, Text, Boolean, DateTime, Enum, JSON
-from sqlalchemy.dialects.sqlite import JSON as SQLiteJSON
 
 from app.db import Base
 

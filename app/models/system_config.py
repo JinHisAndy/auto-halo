@@ -10,4 +10,4 @@ class SystemConfig(Base):
 
     key = Column(String(200), primary_key=True)
     value = Column(Text, nullable=False, default="{}")
-    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

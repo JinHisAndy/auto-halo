@@ -22,6 +22,7 @@ class MediaItem:
 class ParsedArticle:
     title: str
     clean_text: str
+    rich_html: str
     media_items: list[MediaItem] = field(default_factory=list)
     attachment_items: list[MediaItem] = field(default_factory=list)
 
@@ -45,7 +46,7 @@ class ParserService:
 
     async def parse(self, content: FetchedContent) -> ParsedArticle:
         sanitized_title = re.sub(r'[<>:"/\\|?*]', "_", content.title or "untitled")[:200]
-        clean_text = self._clean_html(content.html_raw)
+        rich_html = content.rich_html or self._clean_html(content.html_raw)
 
         media_items = []
         attachment_items = []
@@ -79,6 +80,7 @@ class ParserService:
         return ParsedArticle(
             title=sanitized_title,
             clean_text=clean_text,
+            rich_html=rich_html,
             media_items=media_items,
             attachment_items=attachment_items,
         )

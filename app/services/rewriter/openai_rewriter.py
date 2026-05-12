@@ -1,18 +1,9 @@
 import httpx
+
 from app.services.rewriter.base import BaseRewriter
+from app.services.rewriter.prompt_builder import build_rewrite_prompt
 
-REWRITE_PROMPT = """你是一位资深博客作者。请将以下文章内容用你自己的话重写一遍。
-要求：
-- 保持原文的核心信息和观点不变
-- 用博客的轻松自然口吻表达
-- 不得直接复制粘贴原文的句子
-- 可以调整文章结构和段落顺序
-{extra}
-
-原文内容：
-{text}"""
-
-CITATION_EXTRA = "保留以下原文引用内容（blockquote中的内容需要保留原样）：\n"
+__all__ = ["OpenAIRewriter", "build_rewrite_prompt"]
 
 
 class OpenAIRewriter(BaseRewriter):
@@ -27,8 +18,7 @@ class OpenAIRewriter(BaseRewriter):
             return [{"id": m["id"], "name": m.get("id", "")} for m in data.get("data", [])]
 
     async def rewrite(self, text: str, keep_citations: bool = False) -> str:
-        extra = CITATION_EXTRA if keep_citations else ""
-        prompt = REWRITE_PROMPT.format(extra=extra, text=text)
+        prompt = build_rewrite_prompt(text, keep_citations)
 
         async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(

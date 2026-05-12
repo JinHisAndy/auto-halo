@@ -1,14 +1,16 @@
 import json
-import re
 
 import httpx
-from slugify import slugify
+from sqlalchemy import select
 
 from app.models.system_config import SystemConfig
-from sqlalchemy import select
+from app.services.publisher.payloads import build_halo_payload
 
 
 class HaloClient:
+    def _build_payload(self, title: str, content_html: str, publish_time=None) -> dict:
+        return build_halo_payload(title, content_html, publish_time)
+
     async def _load_config(self, db_session) -> dict | None:
         result = await db_session.execute(
             select(SystemConfig).where(SystemConfig.key == "halo")
@@ -35,43 +37,14 @@ class HaloClient:
             return False, f"Halo 连接失败: {str(e)}"
 
     async def publish(
-        self, db_session, title: str, content_md: str, publish_time=None
+        self, db_session, title: str, content_html: str, publish_time=None
     ) -> str:
         config = await self._load_config(db_session)
         site_url = config["site_url"].rstrip("/")
         api_token = config["api_token"]
 
-        slug = slugify(title, max_length=80)
-        publish = publish_time is None
-
-        payload = {
-            "post": {
-                "spec": {
-                    "title": title,
-                    "slug": slug,
-                    "template": "",
-                    "cover": "",
-                    "deleted": False,
-                    "publish": publish,
-                    "pinned": False,
-                    "allowComment": True,
-                    "visible": "PUBLIC",
-                    "priority": 0,
-                    "excerpt": {"autoGenerate": True, "raw": ""},
-                    "categories": [],
-                    "tags": [],
-                    "htmlMetas": []
-                },
-                "apiVersion": "content.halo.run/v1alpha1",
-                "kind": "Post",
-                "metadata": {"name": slug},
-            },
-            "content": {
-                "raw": content_md,
-                "content": content_md,
-                "rawType": "MARKDOWN"
-            },
-        }
+        payload = self._build_payload(title, content_html, publish_time)
+        slug = payload["post"]["metadata"]["name"]
 
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.post(

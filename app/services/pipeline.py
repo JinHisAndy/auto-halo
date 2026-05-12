@@ -79,7 +79,7 @@ async def run_pipeline(
 
         await _update_task(
             task_id,
-            original_content=content.rich_html or parsed.clean_text,
+            original_content=parsed.rich_html or content.rich_html or parsed.clean_text,
             stage_detail="正在上传原始文件到MinIO...",
             progress=40,
         )
@@ -109,7 +109,8 @@ async def run_pipeline(
             provider_cfg.get("base_url", ""),
             model_name,
         )
-        rewritten = await rewriter.rewrite(parsed.clean_text, keep_citations)
+        rewrite_source = parsed.rich_html or parsed.clean_text
+        rewritten = await rewriter.rewrite(rewrite_source, keep_citations)
 
         await _update_task(
             task_id,

@@ -44,7 +44,7 @@
                 <button @click="showPreview=false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>
             <div class="p-4 overflow-y-auto flex-1 text-sm text-gray-700" x-show="previewTab==='original'" x-html="previewContent"></div>
-            <div class="p-4 overflow-y-auto flex-1 text-sm text-gray-700 prose max-w-none" x-show="previewTab==='rewritten'" x-html="renderMarkdown(previewContent)"></div>
+            <div class="p-4 overflow-y-auto flex-1 text-sm text-gray-700 prose max-w-none" x-show="previewTab==='rewritten'" x-html="previewContent"></div>
         </div>
     </div>
 </div>
@@ -132,13 +132,17 @@ function taskList() {
             if (tab === 'original') {
                 this.previewContent = task.original_content || '';
             } else {
-                this.previewContent = typeof marked !== 'undefined' ? marked.parse(task.rewritten_content || '') : task.rewritten_content || '';
+                this.previewContent = this.renderPreview(task.rewritten_content || '');
             }
             this.showPreview = true;
         },
 
-        renderMarkdown(text) {
-            return typeof marked !== 'undefined' ? marked.parse(text || '') : text || '';
+        renderPreview(text) {
+            const value = text || '';
+            const trimmed = value.trim();
+            const looksLikeHtml = trimmed.startsWith('<') && trimmed.includes('>');
+            if (looksLikeHtml) return value;
+            return typeof marked !== 'undefined' ? marked.parse(value) : value;
         },
 
         async deleteTask(taskId) {

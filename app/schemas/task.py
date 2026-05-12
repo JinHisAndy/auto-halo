@@ -28,7 +28,7 @@ class TaskResponse(BaseModel):
     minio_rewritten_path: Optional[str]
     original_content: Optional[str]
     rewritten_content: Optional[str]
-    halo_post_id: Optional[int]
+    halo_post_id: Optional[str]
     model_provider: str
     model_name: str
     created_at: datetime

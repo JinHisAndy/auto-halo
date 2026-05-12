@@ -1,0 +1,203 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<div x-data="settingsPage()" class="max-w-2xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">系统配置</h1>
+
+    <div class="space-y-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">模型供应商</h2>
+
+            <template x-for="(provider, pidx) in providers" :key="pidx">
+                <div class="border rounded-lg p-4 mb-3">
+                    <div class="flex justify-between items-center mb-3">
+                        <input type="text" x-model="provider.name" class="font-medium border rounded px-2 py-1 text-sm" placeholder="供应商名称">
+                        <button @click="removeProvider(pidx)" class="text-red-500 text-sm hover:text-red-700">删除</button>
+                    </div>
+                    <div class="space-y-2">
+                        <input type="text" x-model="provider.base_url" class="w-full border rounded px-3 py-2 text-sm" placeholder="Base URL">
+                        <input type="password" x-model="provider.api_key" class="w-full border rounded px-3 py-2 text-sm" placeholder="API Key" @focus="provider.api_key=''" x-bind:placeholder="provider.api_key ? '••••••••' : 'API Key'">
+                        <div class="flex gap-2">
+                            <button @click="fetchProviderModels(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">获取模型列表</button>
+                            <button @click="testProviderConnection(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="provider.testing ? '测试中...' : '测试连接'"></button>
+                        </div>
+                        <div x-show="provider.models.length > 0" class="text-xs text-gray-500">
+                            可用模型: <span x-text="provider.models.map(m => m.id).join(', ')"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            <div class="flex gap-2">
+                <button @click="addProvider" class="text-sm text-indigo-600 hover:text-indigo-800">+ 添加供应商</button>
+                <span class="text-gray-300">|</span>
+                <div class="relative" x-data="{ open: false }">
+                    <button @click="open = !open" class="text-sm text-indigo-600 hover:text-indigo-800">从预设模板添加</button>
+                    <div x-show="open" @click.outside="open=false" class="absolute left-0 top-6 bg-white border rounded-lg shadow-lg py-1 z-10">
+                        <template x-for="preset in presets" :key="preset.name">
+                            <button @click="addPreset(preset); open=false" class="block w-full text-left px-4 py-2 text-sm hover:bg-gray-50" x-text="preset.name"></button>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">MinIO 存储</h2>
+            <div class="space-y-3">
+                <input type="text" x-model="minio.endpoint" class="w-full border rounded px-3 py-2 text-sm" placeholder="Endpoint (e.g. play.min.io:9000)">
+                <input type="text" x-model="minio.access_key" class="w-full border rounded px-3 py-2 text-sm" placeholder="Access Key">
+                <input type="password" x-model="minio.secret_key" class="w-full border rounded px-3 py-2 text-sm" placeholder="Secret Key" @focus="minio.secret_key=''" x-bind:placeholder="minio.secret_key ? '••••••••' : 'Secret Key'">
+                <input type="text" x-model="minio.bucket" class="w-full border rounded px-3 py-2 text-sm" placeholder="Bucket Name">
+                <button @click="testConnection('minio')" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="minio.testing ? '测试中...' : '测试连接'"></button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">Halo 发布</h2>
+            <div class="space-y-3">
+                <input type="url" x-model="halo.site_url" class="w-full border rounded px-3 py-2 text-sm" placeholder="站点地址 (e.g. https://blog.example.com)">
+                <input type="password" x-model="halo.api_token" class="w-full border rounded px-3 py-2 text-sm" placeholder="API Token" @focus="halo.api_token=''" x-bind:placeholder="halo.api_token ? '••••••••' : 'API Token'">
+                <button @click="testConnection('halo')" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="halo.testing ? '测试中...' : '测试连接'"></button>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">抓取设置</h2>
+            <div class="flex gap-4">
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="radio" x-model="fetchMode" value="http">
+                    HTTP快速抓取
+                </label>
+                <label class="flex items-center gap-2 text-sm">
+                    <input type="radio" x-model="fetchMode" value="browser">
+                    浏览器渲染（更完整）
+                </label>
+            </div>
+        </div>
+
+        <button @click="save" class="w-full bg-indigo-600 text-white rounded-lg py-2.5 hover:bg-indigo-700 font-medium" :disabled="saving">
+            <span x-show="!saving">保存所有配置</span>
+            <span x-show="saving">保存中...</span>
+        </button>
+
+        <div x-show="toast" x-text="toast" class="fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow text-sm"></div>
+    </div>
+</div>
+
+<script>
+function settingsPage() {
+    return {
+        providers: [],
+        minio: { endpoint: '', access_key: '', secret_key: '', bucket: '', testing: false },
+        halo: { site_url: '', api_token: '', testing: false },
+        fetchMode: 'http',
+        saving: false,
+        toast: '',
+
+        presets: [
+            { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', api_key: '' },
+            { name: '模力方舟', base_url: 'https://ai.gitee.com/v1', api_key: '' },
+            { name: 'MiniMax', base_url: 'https://api.minimax.chat/v1', api_key: '' },
+            { name: 'OpenAI', base_url: 'https://api.openai.com/v1', api_key: '' },
+        ],
+
+        async init() {
+            const resp = await fetch('/api/config');
+            const cfg = await resp.json();
+            this.providers = cfg.providers.map(p => ({
+                name: p.name, api_key: p.api_key, base_url: p.base_url,
+                models: p.models || [], testing: false,
+            }));
+            if (cfg.minio) this.minio = { ...this.minio, ...cfg.minio, testing: false };
+            if (cfg.halo) this.halo = { ...this.halo, ...cfg.halo, testing: false };
+            this.fetchMode = cfg.fetch_mode || 'http';
+        },
+
+        addProvider() {
+            this.providers.push({ name: '', api_key: '', base_url: '', models: [], testing: false });
+        },
+
+        removeProvider(idx) { this.providers.splice(idx, 1); },
+
+        addPreset(preset) {
+            this.providers.push({ ...preset, models: [], testing: false });
+        },
+
+        async fetchProviderModels(provider) {
+            if (!provider.name) return;
+            try {
+                const resp = await fetch(`/api/config/models/${provider.name.toLowerCase()}`, { method: 'POST' });
+                const data = await resp.json();
+                provider.models = data.models || [];
+                this.showToast('模型列表获取成功');
+            } catch (e) {
+                this.showToast('获取模型列表失败: ' + e.message);
+            }
+        },
+
+        async testConnection(service) {
+            let url;
+            if (service === 'minio') {
+                this.minio.testing = true;
+                url = '/api/config/test/minio';
+            } else if (service === 'halo') {
+                this.halo.testing = true;
+                url = '/api/config/test/halo';
+            }
+            try {
+                const resp = await fetch(url, { method: 'POST' });
+                const data = await resp.json();
+                this.showToast(data.message);
+            } catch (e) {
+                this.showToast('测试失败: ' + e.message);
+            }
+            if (service === 'minio') this.minio.testing = false;
+            if (service === 'halo') this.halo.testing = false;
+        },
+
+        async testProviderConnection(provider) {
+            if (!provider.name) return;
+            provider.testing = true;
+            try {
+                const resp = await fetch(`/api/config/test/provider.${provider.name.toLowerCase()}`, { method: 'POST' });
+                const data = await resp.json();
+                this.showToast(data.message);
+            } catch (e) {
+                this.showToast('测试失败: ' + e.message);
+            }
+            provider.testing = false;
+        },
+
+        async save() {
+            this.saving = true;
+            try {
+                const payload = {
+                    providers: this.providers,
+                    minio: this.minio,
+                    halo: this.halo,
+                    fetch_mode: this.fetchMode,
+                };
+                const resp = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (resp.ok) {
+                    this.showToast('配置保存成功');
+                } else {
+                    this.showToast('保存失败');
+                }
+            } catch (e) {
+                this.showToast('保存失败: ' + e.message);
+            }
+            this.saving = false;
+        },
+
+        showToast(msg) {
+            this.toast = msg;
+            setTimeout(() => { this.toast = ''; }, 3000);
+        },
+    }
+}
+</script>
+{% endblock %}

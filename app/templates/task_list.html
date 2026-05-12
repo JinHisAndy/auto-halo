@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<div x-data="taskList()" class="max-w-4xl mx-auto">
+    <h1 class="text-2xl font-bold mb-6">任务列表</h1>
+
+    <div class="space-y-4">
+        <template x-for="task in tasks" :key="task.id">
+            <div class="bg-white rounded-lg shadow p-5">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-semibold text-gray-800" x-text="task.title || '未命名任务'"></h3>
+                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium"
+                        :class="statusClass(task.status)"
+                        x-text="statusLabel(task.status)"></span>
+                </div>
+
+                <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
+                    <div class="h-2.5 rounded-full transition-all duration-500"
+                        :class="progressColor(task.status)"
+                        :style="'width: ' + task.progress + '%'"></div>
+                </div>
+
+                <p class="text-sm text-gray-500 mb-3" x-text="task.stage_detail"></p>
+
+                <div class="flex gap-2 text-sm" x-show="task.status === 'completed' || task.status === 'scheduled' || task.status === 'failed'">
+                    <button @click="preview(task, 'original')" class="text-indigo-600 hover:text-indigo-800" x-show="task.original_content">预览原文</button>
+                    <button @click="preview(task, 'rewritten')" class="text-indigo-600 hover:text-indigo-800" x-show="task.rewritten_content">预览重写稿</button>
+                </div>
+            </div>
+        </template>
+
+        <div x-show="tasks.length === 0" class="text-center text-gray-400 py-12">
+            暂无任务，<a href="/" class="text-indigo-600">创建第一个任务</a>
+        </div>
+    </div>
+
+    <div x-show="showPreview" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showPreview=false">
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+            <div class="flex items-center justify-between p-4 border-b">
+                <div class="flex gap-3">
+                    <button @click="previewTab='original'" :class="previewTab==='original' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'" class="pb-1 px-1 text-sm font-medium">原文</button>
+                    <button @click="previewTab='rewritten'" :class="previewTab==='rewritten' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'" class="pb-1 px-1 text-sm font-medium">重写稿</button>
+                </div>
+                <button @click="showPreview=false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+            </div>
+            <div class="p-4 overflow-y-auto flex-1 whitespace-pre-wrap text-sm text-gray-700" x-text="previewContent"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function taskList() {
+    return {
+        tasks: [],
+        showPreview: false,
+        previewTab: 'original',
+        previewContent: '',
+        ws: null,
+        currentPreviewTask: null,
+
+        async init() {
+            await this.loadTasks();
+            this.connectWs();
+        },
+
+        async loadTasks() {
+            const resp = await fetch('/api/tasks');
+            const data = await resp.json();
+            this.tasks = data.tasks || [];
+        },
+
+        connectWs() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            this.ws = new WebSocket(protocol + '//' + location.host + '/ws/tasks');
+
+            this.ws.onopen = () => {
+                const activeIds = this.tasks.filter(t => !['completed', 'failed'].includes(t.status)).map(t => t.id);
+                if (activeIds.length > 0) {
+                    this.ws.send(JSON.stringify({ type: 'subscribe', task_ids: activeIds }));
+                }
+            };
+
+            this.ws.onmessage = (event) => {
+                const msg = JSON.parse(event.data);
+                if (msg.type === 'task_update') {
+                    const idx = this.tasks.findIndex(t => t.id === msg.task_id);
+                    if (idx >= 0) {
+                        this.tasks[idx].status = msg.status;
+                        this.tasks[idx].progress = msg.progress;
+                        this.tasks[idx].stage_detail = msg.stage_detail;
+                        if (msg.status === 'completed' || msg.status === 'failed') {
+                            this.loadTasks();
+                        }
+                    }
+                }
+            };
+        },
+
+        statusLabel(status) {
+            const map = {
+                fetching: '抓取中', parsing: '解析中', rewriting: '重写中',
+                publishing: '发布中', scheduled: '定时发布中', completed: '已完成', failed: '失败'
+            };
+            return map[status] || status;
+        },
+
+        statusClass(status) {
+            const map = {
+                fetching: 'bg-blue-100 text-blue-700', parsing: 'bg-blue-100 text-blue-700',
+                rewriting: 'bg-blue-100 text-blue-700', publishing: 'bg-blue-100 text-blue-700',
+                scheduled: 'bg-orange-100 text-orange-700', completed: 'bg-green-100 text-green-700',
+                failed: 'bg-red-100 text-red-700'
+            };
+            return map[status] || 'bg-gray-100 text-gray-700';
+        },
+
+        progressColor(status) {
+            if (status === 'failed') return 'bg-red-500';
+            if (status === 'completed') return 'bg-green-500';
+            if (status === 'scheduled') return 'bg-orange-500';
+            return 'bg-blue-500';
+        },
+
+        preview(task, tab) {
+            this.currentPreviewTask = task;
+            this.previewTab = tab;
+            this.previewContent = tab === 'original' ? task.original_content : task.rewritten_content;
+            this.showPreview = true;
+        },
+    }
+}
+</script>
+{% endblock %}

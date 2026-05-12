@@ -8,6 +8,31 @@ from readability import Document
 from app.services.fetcher.base import FetchedContent
 
 
+def _process_summary_html(summary_html: str, base_url: str) -> str:
+    soup = BeautifulSoup(summary_html, "lxml")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+        tag.decompose()
+    allowed = {"img": ["src", "data-src", "data-original", "alt", "width", "height"],
+               "a": ["href"], "blockquote": [], "pre": [], "code": [], "table": [], "tr": [], "td": [], "th": [],
+               "ul": [], "ol": [], "li": [], "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": [],
+               "p": [], "br": [], "b": [], "strong": [], "i": [], "em": [], "u": [], "span": [], "div": [],
+               "video": ["src"], "audio": ["src"], "source": ["src"]}
+    for tag in soup.find_all(True):
+        if tag.name not in allowed:
+            tag.unwrap()
+        else:
+            for attr in list(tag.attrs):
+                if attr not in allowed.get(tag.name, []):
+                    del tag[attr]
+
+    body = soup.find("body") or soup
+    for img in body.find_all("img"):
+        src = img.get("src") or img.get("data-src") or img.get("data-original")
+        if src:
+            img["src"] = urljoin(base_url, src)
+    return str(body)
+
+
 async def fetch_http(url: str) -> FetchedContent:
     headers = {
         "User-Agent": (
@@ -25,37 +50,17 @@ async def fetch_http(url: str) -> FetchedContent:
     title = doc.title()
     summary_html = doc.summary()
 
+    rich_html = _process_summary_html(summary_html, url)
     soup = BeautifulSoup(summary_html, "lxml")
-    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
-        tag.decompose()
-    for tag in soup.find_all(True):
-        allowed = {"img": ["src", "data-src", "data-original", "alt", "width", "height"],
-                   "a": ["href"], "blockquote": [], "pre": [], "code": [], "table": [], "tr": [], "td": [], "th": [],
-                   "ul": [], "ol": [], "li": [], "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": [],
-                   "p": [], "br": [], "b": [], "strong": [], "i": [], "em": [], "u": [], "span": [], "div": [],
-                   "video": ["src"], "audio": ["src"], "source": ["src"]}
-        if tag.name not in allowed:
-            tag.unwrap()
-        else:
-            for attr in list(tag.attrs):
-                if attr not in allowed.get(tag.name, []):
-                    del tag[attr]
-
-    body = soup.find("body") or soup
-    for img in body.find_all("img"):
-        src = img.get("src") or img.get("data-src") or img.get("data-original")
-        if src:
-            img["src"] = urljoin(url, src)
-
-    content_html = str(body)
-    text_content = soup.get_text(separator="\n", strip=True)
+    plain_text = soup.get_text(separator="\n", strip=True)
 
     media_urls = _extract_media_urls(html, url)
 
     return FetchedContent(
         title=title,
         html_raw=html,
-        text_content=text_content,
+        text_content=plain_text,
+        rich_html=rich_html,
         media_urls=media_urls,
     )
 

@@ -36,7 +36,7 @@ class HaloClient:
 
     async def publish(
         self, db_session, title: str, content_md: str, publish_time=None
-    ) -> int:
+    ) -> str:
         config = await self._load_config(db_session)
         site_url = config["site_url"].rstrip("/")
         api_token = config["api_token"]
@@ -49,8 +49,18 @@ class HaloClient:
                 "spec": {
                     "title": title,
                     "slug": slug,
+                    "template": "",
+                    "cover": "",
+                    "deleted": False,
                     "publish": publish,
-                    "publishTime": publish_time.isoformat() if publish_time else None,
+                    "pinned": False,
+                    "allowComment": True,
+                    "visible": "PUBLIC",
+                    "priority": 0,
+                    "excerpt": {"autoGenerate": True, "raw": ""},
+                    "categories": [],
+                    "tags": [],
+                    "htmlMetas": []
                 },
                 "apiVersion": "content.halo.run/v1alpha1",
                 "kind": "Post",
@@ -59,6 +69,7 @@ class HaloClient:
             "content": {
                 "raw": content_md,
                 "content": content_md,
+                "rawType": "MARKDOWN"
             },
         }
 
@@ -71,9 +82,10 @@ class HaloClient:
                 },
                 json=payload,
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                raise Exception(f"Halo 发布失败 (HTTP {resp.status_code}): {resp.text}")
             data = resp.json()
-            return data["metadata"].get("name", slug)
+            return data.get("metadata", {}).get("name", slug)
 
 
 halo_client = HaloClient()

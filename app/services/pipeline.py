@@ -79,7 +79,7 @@ async def run_pipeline(
 
         await _update_task(
             task_id,
-            original_content=parsed.clean_text,
+            original_content=content.rich_html or parsed.clean_text,
             stage_detail="正在上传原始文件到MinIO...",
             progress=40,
         )

@@ -4,6 +4,7 @@ from bs4 import BeautifulSoup
 from readability import Document
 
 from app.services.fetcher.base import FetchedContent
+from app.services.fetcher.http_fetcher import _extract_media_urls, _process_summary_html
 
 
 async def fetch_browser(url: str) -> FetchedContent:
@@ -20,15 +21,16 @@ async def fetch_browser(url: str) -> FetchedContent:
     doc = Document(html)
     summary_html = doc.summary()
 
+    rich_html = _process_summary_html(summary_html, url)
     soup = BeautifulSoup(summary_html, "lxml")
     text_content = soup.get_text(separator="\n", strip=True)
 
-    from app.services.fetcher.http_fetcher import _extract_media_urls
     media_urls = _extract_media_urls(html, url)
 
     return FetchedContent(
         title=title,
         html_raw=html,
         text_content=text_content,
+        rich_html=rich_html,
         media_urls=media_urls,
     )

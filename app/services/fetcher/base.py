@@ -6,4 +6,5 @@ class FetchedContent:
     title: str
     html_raw: str
     text_content: str
+    rich_html: str = ""
     media_urls: list[str] = field(default_factory=list)

@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  auto-halo:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./app:/app/app
+      - ./run.py:/app/run.py
+      - ./requirements.txt:/app/requirements.txt
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///data/auto-halo.db
+    restart: unless-stopped

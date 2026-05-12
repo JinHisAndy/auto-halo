@@ -25,6 +25,7 @@
                     <button @click="preview(task, 'original')" class="text-indigo-600 hover:text-indigo-800" x-show="task.original_content">预览原文</button>
                     <button @click="preview(task, 'rewritten')" class="text-indigo-600 hover:text-indigo-800" x-show="task.rewritten_content">预览重写稿</button>
                 </div>
+                <button @click="deleteTask(task.id)" class="mt-2 text-xs text-red-500 hover:text-red-700">删除</button>
             </div>
         </template>
 
@@ -129,6 +130,16 @@ function taskList() {
             this.previewTab = tab;
             this.previewContent = tab === 'original' ? task.original_content : task.rewritten_content;
             this.showPreview = true;
+        },
+
+        async deleteTask(taskId) {
+            if (!confirm('确认删除此任务？')) return;
+            try {
+                await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+                this.tasks = this.tasks.filter(t => t.id !== taskId);
+            } catch (e) {
+                alert('删除失败: ' + e.message);
+            }
         },
     }
 }

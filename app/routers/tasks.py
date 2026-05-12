@@ -84,3 +84,15 @@ async def get_task(task_id: str):
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
     return TaskResponse.model_validate(task)
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: str):
+    async with async_session() as db:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await db.delete(task)
+        await db.commit()
+    return {"message": "已删除"}

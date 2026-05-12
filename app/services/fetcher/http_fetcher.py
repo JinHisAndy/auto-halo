@@ -26,6 +26,28 @@ async def fetch_http(url: str) -> FetchedContent:
     summary_html = doc.summary()
 
     soup = BeautifulSoup(summary_html, "lxml")
+    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
+        tag.decompose()
+    for tag in soup.find_all(True):
+        allowed = {"img": ["src", "data-src", "data-original", "alt", "width", "height"],
+                   "a": ["href"], "blockquote": [], "pre": [], "code": [], "table": [], "tr": [], "td": [], "th": [],
+                   "ul": [], "ol": [], "li": [], "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": [],
+                   "p": [], "br": [], "b": [], "strong": [], "i": [], "em": [], "u": [], "span": [], "div": [],
+                   "video": ["src"], "audio": ["src"], "source": ["src"]}
+        if tag.name not in allowed:
+            tag.unwrap()
+        else:
+            for attr in list(tag.attrs):
+                if attr not in allowed.get(tag.name, []):
+                    del tag[attr]
+
+    body = soup.find("body") or soup
+    for img in body.find_all("img"):
+        src = img.get("src") or img.get("data-src") or img.get("data-original")
+        if src:
+            img["src"] = urljoin(url, src)
+
+    content_html = str(body)
     text_content = soup.get_text(separator="\n", strip=True)
 
     media_urls = _extract_media_urls(html, url)
@@ -43,9 +65,11 @@ def _extract_media_urls(html: str, base_url: str) -> list[str]:
     urls = set()
 
     for tag in soup.find_all("img"):
-        src = tag.get("src") or tag.get("data-src")
+        src = tag.get("src") or tag.get("data-src") or tag.get("data-original") or tag.get("data-url") or tag.get("data-lazy-src")
         if src:
-            urls.add(urljoin(base_url, src))
+            full = urljoin(base_url, src)
+            if not full.startswith("data:"):
+                urls.add(full)
 
     for tag in soup.find_all("video"):
         src = tag.get("src")

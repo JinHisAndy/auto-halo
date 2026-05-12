@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from app.db import init_db, Base, engine
+from app.db import init_db
 from app.routers import tasks, config, pages, ws
 
 logging.basicConfig(level=logging.INFO)

@@ -88,6 +88,11 @@ async def run_pipeline(
         async with async_session() as db:
             minio_path = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
 
+        import os
+        for item in parsed.media_items + parsed.attachment_items:
+            if item.local_path and os.path.exists(item.local_path):
+                os.remove(item.local_path)
+
         await _update_task(
             task_id,
             status=TaskStatus.rewriting,

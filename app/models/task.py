@@ -39,7 +39,7 @@ class Task(Base):
     minio_rewritten_path = Column(String(500), nullable=True)
     original_content = Column(Text, nullable=True)
     rewritten_content = Column(Text, nullable=True)
-    halo_post_id = Column(Integer, nullable=True)
+    halo_post_id = Column(String(200), nullable=True)
     model_provider = Column(String(50), nullable=False)
     model_name = Column(String(100), nullable=False)
     created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))

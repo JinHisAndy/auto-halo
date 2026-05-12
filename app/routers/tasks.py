@@ -1,17 +1,38 @@
 import asyncio
+import ipaddress
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from sqlalchemy import select
 
-from app.db import async_session, get_db
+from app.db import async_session
 from app.models.task import Task, TaskStatus, PublishType
 from app.schemas.task import TaskCreate, TaskResponse, TaskListResponse
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
+
+def _validate_url(url: str):
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail=f"不支持的URL协议: {parsed.scheme}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise HTTPException(status_code=400, detail="无效的URL")
+    try:
+        addr = ipaddress.ip_address(hostname)
+        if addr.is_private or addr.is_loopback:
+            raise HTTPException(status_code=400, detail="不允许访问内网地址")
+    except ValueError:
+        pass
+
+
 @router.post("", response_model=TaskResponse)
 async def create_task(payload: TaskCreate, background_tasks: BackgroundTasks):
+    for url in payload.urls:
+        _validate_url(url)
+
     task = Task(
         urls=payload.urls,
         keep_citations=payload.keep_citations,

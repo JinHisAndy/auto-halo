@@ -88,7 +88,11 @@ function taskList() {
                         this.tasks[idx].progress = msg.progress;
                         this.tasks[idx].stage_detail = msg.stage_detail;
                         if (msg.status === 'completed' || msg.status === 'failed') {
-                            this.loadTasks();
+                            fetch(`/api/tasks/${msg.task_id}`)
+                                .then(r => r.json())
+                                .then(updated => {
+                                    if (idx >= 0) this.tasks[idx] = updated;
+                                });
                         }
                     }
                 }

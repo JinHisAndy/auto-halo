@@ -212,6 +212,7 @@ def test_pipeline_retry_from_stage_contains_stage_specific_retry_paths():
     assert 'if task.failed_stage == "fetching":' in source
     assert 'if task.failed_stage == "parsing":' in source
     assert 'if task.failed_stage == "rewriting":' in source
+    assert 'if task.failed_stage == "scheduled":' in source
     assert 'if task.failed_stage == "publishing":' in source
 
 
@@ -222,6 +223,8 @@ def test_pipeline_retry_helpers_preserve_stage_specific_sources():
     assert "task.original_content" in source
     assert "task.rewritten_title" in source
     assert "task.rewritten_content" in source
+    assert "rewritten_title = task.rewritten_title or task.title" in source
+    assert "await _publish_or_schedule(" in source
 
 
 def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_failed_stage():

@@ -282,6 +282,41 @@ async def _retry_from_rewriting(
     )
 
 
+async def _retry_from_scheduled(
+    task_id: str,
+    task: Task,
+    provider_key: str,
+    provider_cfg: dict,
+    model_name: str,
+    keep_citations: bool,
+    publish_type: str,
+    scheduled_at: str | None,
+):
+    rewritten_title = task.rewritten_title or task.title
+    if not rewritten_title or not task.rewritten_content:
+        await _retry_from_rewriting(
+            task_id=task_id,
+            task=task,
+            provider_key=provider_key,
+            provider_cfg=provider_cfg,
+            model_name=model_name,
+            keep_citations=keep_citations,
+            publish_type=publish_type,
+            scheduled_at=scheduled_at,
+        )
+        return
+
+    await _publish_or_schedule(
+        task_id=task_id,
+        publish_type=publish_type,
+        scheduled_at=scheduled_at,
+        provider_key=provider_key,
+        model_name=model_name,
+        rewritten_title=rewritten_title,
+        rewritten_body=task.rewritten_content,
+    )
+
+
 async def republish_task_content(task_id: str):
     from app.services.publisher.halo_client import halo_client
 
@@ -365,6 +400,12 @@ async def retry_from_stage(task_id: str):
             keep_citations = task.keep_citations
             publish_type = task.publish_type.value if isinstance(task.publish_type, PublishType) else str(task.publish_type)
             scheduled_at = task.scheduled_at.isoformat() if task.scheduled_at else None
+        elif task.failed_stage == "scheduled":
+            provider_key = task.model_provider
+            model_name = task.model_name
+            keep_citations = task.keep_citations
+            publish_type = task.publish_type.value if isinstance(task.publish_type, PublishType) else str(task.publish_type)
+            scheduled_at = task.scheduled_at.isoformat() if task.scheduled_at else None
 
         if task.failed_stage == "publishing":
             await republish_task_content(task_id)
@@ -401,6 +442,19 @@ async def retry_from_stage(task_id: str):
 
         if task.failed_stage == "rewriting":
             await _retry_from_rewriting(
+                task_id=task_id,
+                task=task,
+                provider_key=provider_key,
+                provider_cfg=provider_cfg,
+                model_name=model_name,
+                keep_citations=keep_citations,
+                publish_type=publish_type,
+                scheduled_at=scheduled_at,
+            )
+            return
+
+        if task.failed_stage == "scheduled":
+            await _retry_from_scheduled(
                 task_id=task_id,
                 task=task,
                 provider_key=provider_key,

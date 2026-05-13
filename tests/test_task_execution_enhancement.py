@@ -6,6 +6,7 @@ import sys
 import types
 
 import httpx
+import pytest
 from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -24,7 +25,9 @@ from app.services.rewriter.mofi import MofiRewriter
 from app.services.rewriter.minimax import MiniMaxRewriter
 from app.services.rewriter.openai_rewriter import OpenAIRewriter
 from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
+from app.services.publisher.halo_client import HaloClient
 from app.services.publisher.conflict_resolution import build_retry_title
+from app.services.publisher.payloads import build_halo_payload
 
 
 def test_task_response_supports_retry_metadata_and_rewritten_title():
@@ -198,7 +201,62 @@ def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_fail
     assert 'task.failed_stage = "publishing"' in source
 
 
-def test_halo_client_source_contains_duplicate_name_retry_loop():
-    source = Path("app/services/publisher/halo_client.py").read_text(encoding="utf-8")
-    assert "名称重复" in source or "重复的名称" in source
-    assert "for attempt in range(1, 6)" in source
+def test_build_halo_payload_keeps_retry_slug_suffix_when_title_truncates():
+    long_title = "Long Title " * 20
+
+    initial_payload = build_halo_payload(long_title, "<p>body</p>")
+    retry_payload = build_halo_payload(
+        build_retry_title(long_title, 1),
+        "<p>body</p>",
+        slug_suffix="retry-1",
+    )
+
+    assert initial_payload["post"]["metadata"]["name"] != retry_payload["post"]["metadata"]["name"]
+    assert retry_payload["post"]["metadata"]["name"].endswith("-retry-1")
+    assert retry_payload["post"]["spec"]["slug"].endswith("-retry-1")
+
+
+def test_halo_client_retries_duplicate_names_five_times_with_distinct_retry_names(monkeypatch):
+    posted_payloads = []
+    long_title = "Long Title " * 20
+
+    class FakeResponse:
+        def __init__(self, status_code: int, text: str):
+            self.status_code = status_code
+            self.text = text
+
+        @property
+        def is_success(self):
+            return False
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            posted_payloads.append(kwargs["json"])
+            return FakeResponse(409, "名称重复")
+
+    async def fake_load_config(self, db_session):
+        return {"site_url": "https://halo.example", "api_token": "token"}
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(HaloClient, "_load_config", fake_load_config)
+
+    with pytest.raises(Exception, match="自动重试 5 次后仍失败"):
+        asyncio.run(HaloClient().publish(None, long_title, "<p>body</p>"))
+
+    retry_names = [payload["post"]["metadata"]["name"] for payload in posted_payloads]
+    retry_titles = [payload["post"]["spec"]["title"] for payload in posted_payloads]
+
+    assert len(retry_names) == 6
+    assert len(set(retry_names)) == 6
+    assert retry_titles[0] == long_title
+    assert retry_titles[1] == build_retry_title(long_title, 1)
+    assert retry_titles[-1] == build_retry_title(long_title, 5)

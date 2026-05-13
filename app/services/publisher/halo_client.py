@@ -9,8 +9,19 @@ from app.services.publisher.payloads import build_halo_payload
 
 
 class HaloClient:
-    def _build_payload(self, title: str, content_html: str, publish_time=None) -> dict:
-        return build_halo_payload(title, content_html, publish_time)
+    def _build_payload(
+        self,
+        title: str,
+        content_html: str,
+        publish_time=None,
+        slug_suffix: str | None = None,
+    ) -> dict:
+        return build_halo_payload(
+            title,
+            content_html,
+            publish_time,
+            slug_suffix=slug_suffix,
+        )
 
     async def _load_config(self, db_session) -> dict | None:
         result = await db_session.execute(
@@ -48,8 +59,14 @@ class HaloClient:
         current_title = title
 
         async with httpx.AsyncClient(timeout=30) as client:
-            for attempt in range(1, 6):
-                payload = self._build_payload(current_title, content_html, publish_time)
+            for attempt in range(0, 6):
+                slug_suffix = None if attempt == 0 else f"retry-{attempt}"
+                payload = self._build_payload(
+                    current_title,
+                    content_html,
+                    publish_time,
+                    slug_suffix=slug_suffix,
+                )
                 slug = payload["post"]["metadata"]["name"]
 
                 resp = await client.post(
@@ -64,7 +81,9 @@ class HaloClient:
                     data = resp.json()
                     return data.get("metadata", {}).get("name", slug)
                 if "名称重复" in resp.text or "重复的名称" in resp.text:
-                    current_title = build_retry_title(base_title, attempt)
+                    if attempt == 5:
+                        break
+                    current_title = build_retry_title(base_title, attempt + 1)
                     continue
                 raise Exception(f"Halo 发布失败 (HTTP {resp.status_code}): {resp.text}")
 

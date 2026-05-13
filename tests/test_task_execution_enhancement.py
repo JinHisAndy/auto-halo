@@ -7,6 +7,8 @@ import types
 
 import httpx
 import pytest
+from fastapi import BackgroundTasks
+from pydantic import ValidationError
 from sqlalchemy import create_engine, delete, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,7 +22,8 @@ sys.modules.setdefault(
 
 from app.db import async_session, engine, ensure_task1_task_columns
 from app.models.task import PublishType, Task, TaskStatus
-from app.schemas.task import TaskResponse
+from app.routers.tasks import create_task
+from app.schemas.task import TaskCreate, TaskResponse
 from app.services.rewriter.deepseek import DeepSeekRewriter
 from app.services.rewriter.mofi import MofiRewriter
 from app.services.rewriter.minimax import MiniMaxRewriter
@@ -109,6 +112,56 @@ def test_task_response_supports_retry_metadata_and_rewritten_title():
     assert task.failed_stage == "publishing"
     assert task.trigger_source == "ui"
     assert task.rewritten_title == "Rewritten title"
+
+
+def test_task_create_defaults_trigger_source_to_ui_and_normalizes_api():
+    base_payload = {
+        "urls": ["https://example.com"],
+        "model_provider": "openai",
+        "model_name": "gpt-test",
+    }
+
+    default_payload = TaskCreate.model_validate(base_payload)
+    api_payload = TaskCreate.model_validate({**base_payload, "trigger_source": "API"})
+
+    assert default_payload.trigger_source == "ui"
+    assert api_payload.trigger_source == "api"
+
+
+def test_task_create_rejects_unknown_trigger_source():
+    with pytest.raises(ValidationError, match="trigger_source"):
+        TaskCreate.model_validate(
+            {
+                "urls": ["https://example.com"],
+                "model_provider": "openai",
+                "model_name": "gpt-test",
+                "trigger_source": "cli",
+            }
+        )
+
+
+def test_task_router_persists_trigger_source_from_payload():
+    async def _exercise():
+        await _reset_tasks_table()
+        payload = TaskCreate.model_validate(
+            {
+                "urls": ["https://example.com"],
+                "model_provider": "openai",
+                "model_name": "gpt-test",
+                "trigger_source": "API",
+            }
+        )
+
+        created = await create_task(payload, BackgroundTasks())
+
+        async with async_session() as db:
+            stored = await db.get(Task, created.id)
+
+        assert created.trigger_source == "api"
+        assert stored is not None
+        assert stored.trigger_source == "api"
+
+    asyncio.run(_exercise())
 
 
 def test_async_session_is_initialized_at_import_time():
@@ -290,8 +343,8 @@ def test_republish_rejects_failed_tasks_not_in_publishing_stage():
 @pytest.mark.parametrize(
     "overrides",
     [
-        {"rewritten_title": None},
         {"rewritten_content": None},
+        {"title": None, "rewritten_title": None},
     ],
 )
 def test_republish_rejects_missing_rewritten_title_or_content(overrides):
@@ -299,6 +352,26 @@ def test_republish_rejects_missing_rewritten_title_or_content(overrides):
 
     with pytest.raises(ValueError, match="Task has no rewritten content to republish"):
         asyncio.run(republish_task_content(task_id))
+
+
+def test_republish_allows_legacy_task_with_original_title_fallback(monkeypatch):
+    published = {}
+
+    async def fake_publish(db, title, body):
+        published["title"] = title
+        published["body"] = body
+        return "halo-post-1"
+
+    monkeypatch.setattr("app.services.publisher.halo_client.halo_client.publish", fake_publish)
+
+    task_id = asyncio.run(_create_task(rewritten_title=None, title="Original fallback title"))
+
+    asyncio.run(republish_task_content(task_id))
+
+    assert published == {
+        "title": "Original fallback title",
+        "body": "<p>rewritten</p>",
+    }
 
 
 @pytest.mark.parametrize(

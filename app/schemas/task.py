@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 
 class TaskCreate(BaseModel):
@@ -9,8 +9,17 @@ class TaskCreate(BaseModel):
     keep_citations: bool = False
     publish_type: str = "immediate"
     scheduled_at: Optional[datetime] = None
+    trigger_source: str = "ui"
     model_provider: str
     model_name: str
+
+    @field_validator("trigger_source", mode="before")
+    @classmethod
+    def normalize_trigger_source(cls, value: str | None) -> str:
+        normalized = (value or "ui").strip().lower()
+        if normalized not in {"ui", "api"}:
+            raise ValueError("trigger_source must be 'ui' or 'api'")
+        return normalized
 
 
 class TaskResponse(BaseModel):

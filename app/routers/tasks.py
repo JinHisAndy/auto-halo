@@ -38,6 +38,7 @@ async def create_task(payload: TaskCreate, background_tasks: BackgroundTasks):
         keep_citations=payload.keep_citations,
         publish_type=PublishType(payload.publish_type),
         scheduled_at=payload.scheduled_at,
+        trigger_source=payload.trigger_source,
         model_provider=payload.model_provider,
         model_name=payload.model_name,
         status=TaskStatus.fetching,

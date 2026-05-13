@@ -32,7 +32,7 @@ def ensure_task_can_republish(task: Task) -> None:
     else:
         raise ValueError("Task status does not support republish")
 
-    if not task.rewritten_title or not task.rewritten_content:
+    if not (task.rewritten_title or task.title) or not task.rewritten_content:
         raise ValueError("Task has no rewritten content to republish")
 
 
@@ -358,7 +358,7 @@ async def republish_task_content(task_id: str):
         async with async_session() as db:
             result = await db.execute(select(Task).where(Task.id == task_id))
             task = result.scalar_one()
-            post_id = await halo_client.publish(db, task.rewritten_title, task.rewritten_content)
+            post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)
 
         await _update_task(
             task_id,

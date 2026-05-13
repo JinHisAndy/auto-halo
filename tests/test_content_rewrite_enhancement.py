@@ -17,6 +17,7 @@ sys.modules.setdefault(
 
 from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
+from app.services.tagging.service import build_tag_records
 from app.services.rewriter.prompt_builder import build_rewrite_prompt
 from app.services.rewriter.validation import validate_rewritten_html
 
@@ -51,6 +52,16 @@ def test_task_response_supports_generated_tags():
     )
 
     assert task.generated_tags == [{"name": "Linux", "color": "blue"}]
+
+
+def test_build_tag_records_assigns_allowed_colors_and_limits_count():
+    tags = build_tag_records(["Linux", "SSH", "Docker", "运维"])
+    assert 3 <= len(tags) <= 6
+    assert all("name" in tag and "color" in tag for tag in tags)
+    assert all(
+        tag["color"] in {"blue", "indigo", "teal", "emerald", "amber", "rose"}
+        for tag in tags
+    )
 
 
 def test_ensure_task1_task_columns_adds_generated_tags_for_existing_sqlite_db(tmp_path):

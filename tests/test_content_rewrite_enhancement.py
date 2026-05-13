@@ -229,3 +229,10 @@ def test_pipeline_source_validates_rewritten_html_and_persists_generated_tags():
     assert "_build_generated_tags(rewritten_title, rewritten_body)" in source
     assert 'BeautifulSoup(rewritten_body or "", "html.parser")' in source
     assert "generated_tags=" in source
+
+
+def test_halo_client_source_threads_tags_through_publish_and_payload_builder():
+    source = Path("app/services/publisher/halo_client.py").read_text(encoding="utf-8")
+
+    assert "tags: list[dict] | None = None" in source
+    assert "tags=tags," in source

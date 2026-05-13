@@ -19,7 +19,7 @@ from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
 from app.services import pipeline
 from app.services.publisher.payloads import build_halo_payload
-from app.services.tagging.service import build_tag_records
+from app.services.tagging.service import build_tag_records, generate_tags_from_rewritten_content
 from app.services.rewriter.prompt_builder import build_rewrite_prompt
 from app.services.rewriter.validation import validate_rewritten_html
 
@@ -198,36 +198,42 @@ def test_rewritten_html_validator_rejects_non_html_angle_bracket_text():
     assert "html" in message.lower()
 
 
-def test_build_generated_tags_uses_rewritten_title_and_html_body_text(monkeypatch):
-    captured = {}
-
-    def fake_build_tag_records(names):
-        captured["names"] = names
-        return [{"name": name, "color": "blue"} for name in names]
-
-    monkeypatch.setattr(pipeline, "build_tag_records", fake_build_tag_records)
-
-    tags = pipeline._build_generated_tags(
+def test_generate_tags_from_rewritten_content_filters_generic_terms_and_keeps_useful_tags():
+    tags = generate_tags_from_rewritten_content(
         "Rewritten Kubernetes Guide",
-        "<article><p>Deep Docker tuning</p><p>SSH hardening</p></article>",
+        "<article><p>Docker tuning with SSH hardening for Linux and Nginx.</p><p>容器 编排 运维 经验分享 文章 博客</p></article>",
     )
 
-    assert captured["names"] == [
-        "Rewritten",
-        "Kubernetes",
-        "Guide",
-        "Deep",
-        "Docker",
-        "tuning",
-    ]
-    assert tags == [{"name": name, "color": "blue"} for name in captured["names"]]
+    names = [tag["name"] for tag in tags]
+
+    assert 3 <= len(tags) <= 6
+    assert "Rewritten" not in names
+    assert "Guide" not in names
+    assert "经验分享" not in names
+    assert "文章" not in names
+    assert "博客" not in names
+    assert any(name in names for name in ["Kubernetes", "Docker", "SSH", "Linux", "Nginx", "容器", "编排", "运维"])
+    assert all(
+        tag["color"] in {"blue", "indigo", "teal", "emerald", "amber", "rose"}
+        for tag in tags
+    )
+
+
+def test_rewritten_html_validator_rejects_heavy_media_loss_even_if_one_image_remains():
+    ok, message = validate_rewritten_html(
+        "<article><img src='1.jpg' /><img src='2.jpg' /><img src='3.jpg' /><img src='4.jpg' /></article>",
+        "<article><p>Rewritten</p><img src='1.jpg' /></article>",
+    )
+
+    assert ok is False
+    assert "image" in message.lower()
 
 
 def test_pipeline_source_validates_rewritten_html_and_persists_generated_tags():
     source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
     assert "validate_rewritten_html(" in source
-    assert "_build_generated_tags(rewritten_title, rewritten_body)" in source
-    assert 'BeautifulSoup(rewritten_body or "", "html.parser")' in source
+    assert "generate_tags_from_rewritten_content(rewritten_title, rewritten_body)" in source
+    assert "from app.services.tagging.service import generate_tags_from_rewritten_content" in source
     assert "generated_tags=" in source
 
 

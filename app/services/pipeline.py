@@ -1,9 +1,6 @@
 import json
 import logging
-import re
 from datetime import datetime, timezone
-
-from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app.db import async_session
@@ -11,7 +8,7 @@ from app.models.task import Task, TaskStatus, PublishType
 from app.models.system_config import SystemConfig
 from app.services.rewriter.prompt_builder import extract_title_and_body
 from app.services.rewriter.validation import validate_rewritten_html
-from app.services.tagging.service import build_tag_records
+from app.services.tagging.service import generate_tags_from_rewritten_content
 
 logger = logging.getLogger(__name__)
 
@@ -21,19 +18,6 @@ class StageExecutionError(Exception):
         super().__init__(str(original))
         self.stage = stage
         self.original = original
-
-
-def _build_generated_tags(rewritten_title: str, rewritten_body: str) -> list[dict]:
-    text = BeautifulSoup(rewritten_body or "", "html.parser").get_text(" ", strip=True)
-    candidates: list[str] = []
-
-    for value in re.findall(r"[A-Za-z][A-Za-z0-9+#.-]{2,}|[\u4e00-\u9fff]{2,8}", f"{rewritten_title or ''} {text}"):
-        if value not in candidates:
-            candidates.append(value)
-        if len(candidates) >= 6:
-            break
-
-    return build_tag_records(candidates)
 
 
 def ensure_task_is_retryable(task: Task) -> None:
@@ -184,7 +168,7 @@ async def _rewrite_from_source(
         if not ok:
             raise ValueError(message)
 
-        generated_tags = _build_generated_tags(rewritten_title, rewritten_body)
+        generated_tags = generate_tags_from_rewritten_content(rewritten_title, rewritten_body)
 
         await _update_task(
             task_id,

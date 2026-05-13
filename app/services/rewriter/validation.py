@@ -15,6 +15,11 @@ def _has_tag(content: str, tag_name: str) -> bool:
     return soup.find(tag_name) is not None
 
 
+def _count_tag(content: str, tag_name: str) -> int:
+    soup = BeautifulSoup(content or "", "lxml")
+    return len(soup.find_all(tag_name))
+
+
 def validate_rewritten_html(original_html: str, rewritten_html: str) -> tuple[bool, str]:
     if not _looks_like_html(rewritten_html):
         return False, "Rewritten body must be HTML."
@@ -27,7 +32,13 @@ def validate_rewritten_html(original_html: str, rewritten_html: str) -> tuple[bo
     )
 
     for tag_name, message in checks:
-        if _has_tag(original_html, tag_name) and not _has_tag(rewritten_html, tag_name):
+        original_count = _count_tag(original_html, tag_name)
+        rewritten_count = _count_tag(rewritten_html, tag_name)
+
+        if original_count and rewritten_count == 0:
+            return False, message
+
+        if original_count > 1 and rewritten_count < (original_count / 2):
             return False, message
 
     return True, "OK"

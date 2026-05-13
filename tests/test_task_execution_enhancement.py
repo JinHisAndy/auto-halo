@@ -7,7 +7,7 @@ import types
 
 import httpx
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, delete, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -19,15 +19,63 @@ sys.modules.setdefault(
 )
 
 from app.db import async_session, engine, ensure_task1_task_columns
+from app.models.task import PublishType, Task, TaskStatus
 from app.schemas.task import TaskResponse
 from app.services.rewriter.deepseek import DeepSeekRewriter
 from app.services.rewriter.mofi import MofiRewriter
 from app.services.rewriter.minimax import MiniMaxRewriter
 from app.services.rewriter.openai_rewriter import OpenAIRewriter
+from app.services.pipeline import republish_task_content, retry_from_stage
 from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
 from app.services.publisher.halo_client import HaloClient
 from app.services.publisher.conflict_resolution import build_retry_title
 from app.services.publisher.payloads import build_halo_payload
+
+
+async def _reset_tasks_table():
+    from app.db import init_db
+
+    await init_db()
+    async with async_session() as db:
+        await db.execute(delete(Task))
+        await db.commit()
+
+
+async def _create_task(**overrides) -> str:
+    await _reset_tasks_table()
+
+    task = Task(
+        title="Original",
+        urls=["https://example.com"],
+        status=TaskStatus.completed,
+        progress=100,
+        stage_detail="done",
+        error_msg=None,
+        keep_citations=False,
+        publish_type=PublishType.immediate,
+        scheduled_at=None,
+        minio_original_path=None,
+        minio_rewritten_path=None,
+        original_content="<p>original</p>",
+        rewritten_content="<p>rewritten</p>",
+        rewritten_title="Rewritten title",
+        failed_stage=None,
+        trigger_source="ui",
+        halo_post_id=None,
+        model_provider="openai",
+        model_name="gpt-test",
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    for key, value in overrides.items():
+        setattr(task, key, value)
+
+    async with async_session() as db:
+        db.add(task)
+        await db.commit()
+        await db.refresh(task)
+        return task.id
 
 
 def test_task_response_supports_retry_metadata_and_rewritten_title():
@@ -225,6 +273,46 @@ def test_pipeline_retry_helpers_preserve_stage_specific_sources():
     assert "task.rewritten_content" in source
     assert "rewritten_title = task.rewritten_title or task.title" in source
     assert "await _publish_or_schedule(" in source
+
+
+def test_republish_rejects_failed_tasks_not_in_publishing_stage():
+    task_id = asyncio.run(
+        _create_task(
+            status=TaskStatus.failed,
+            failed_stage="rewriting",
+        )
+    )
+
+    with pytest.raises(ValueError, match="Task status does not support republish"):
+        asyncio.run(republish_task_content(task_id))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"rewritten_title": None},
+        {"rewritten_content": None},
+    ],
+)
+def test_republish_rejects_missing_rewritten_title_or_content(overrides):
+    task_id = asyncio.run(_create_task(**overrides))
+
+    with pytest.raises(ValueError, match="Task has no rewritten content to republish"):
+        asyncio.run(republish_task_content(task_id))
+
+
+@pytest.mark.parametrize(
+    ("status", "failed_stage"),
+    [
+        (TaskStatus.completed, "publishing"),
+        (TaskStatus.failed, None),
+    ],
+)
+def test_retry_rejects_invalid_task_state(status, failed_stage):
+    task_id = asyncio.run(_create_task(status=status, failed_stage=failed_stage))
+
+    with pytest.raises(ValueError, match="Task is not retryable"):
+        asyncio.run(retry_from_stage(task_id))
 
 
 def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_failed_stage():

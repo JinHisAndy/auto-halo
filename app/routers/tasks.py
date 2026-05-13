@@ -88,12 +88,16 @@ async def get_task(task_id: str):
 
 @router.post("/{task_id}/retry")
 async def retry_task(task_id: str, background_tasks: BackgroundTasks):
+    from app.services.pipeline import ensure_task_is_retryable
+
     async with async_session() as db:
         result = await db.execute(select(Task).where(Task.id == task_id))
         task = result.scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        if task.status != TaskStatus.failed or not task.failed_stage:
+        try:
+            ensure_task_is_retryable(task)
+        except ValueError:
             raise HTTPException(status_code=400, detail="Task is not retryable")
 
     from app.services.pipeline import retry_from_stage
@@ -104,15 +108,17 @@ async def retry_task(task_id: str, background_tasks: BackgroundTasks):
 
 @router.post("/{task_id}/republish")
 async def republish_task(task_id: str, background_tasks: BackgroundTasks):
+    from app.services.pipeline import ensure_task_can_republish
+
     async with async_session() as db:
         result = await db.execute(select(Task).where(Task.id == task_id))
         task = result.scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
-        if task.status not in (TaskStatus.completed, TaskStatus.failed):
-            raise HTTPException(status_code=400, detail="Task status does not support republish")
-        if not task.rewritten_title or not task.rewritten_content:
-            raise HTTPException(status_code=400, detail="Task has no rewritten content to republish")
+        try:
+            ensure_task_can_republish(task)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     from app.services.pipeline import republish_task_content
 

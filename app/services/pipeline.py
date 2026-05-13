@@ -19,6 +19,23 @@ class StageExecutionError(Exception):
         self.original = original
 
 
+def ensure_task_is_retryable(task: Task) -> None:
+    if task.status != TaskStatus.failed or not task.failed_stage:
+        raise ValueError("Task is not retryable")
+
+
+def ensure_task_can_republish(task: Task) -> None:
+    if task.status == TaskStatus.completed:
+        pass
+    elif task.status == TaskStatus.failed and task.failed_stage == "publishing":
+        pass
+    else:
+        raise ValueError("Task status does not support republish")
+
+    if not task.rewritten_title or not task.rewritten_content:
+        raise ValueError("Task has no rewritten content to republish")
+
+
 async def _update_task(task_id: str, **kwargs):
     async with async_session() as db:
         result = await db.execute(select(Task).where(Task.id == task_id))
@@ -325,10 +342,7 @@ async def republish_task_content(task_id: str):
         task = result.scalar_one_or_none()
         if not task:
             raise ValueError("Task not found")
-        if task.status not in (TaskStatus.completed, TaskStatus.failed):
-            raise ValueError("Task status does not support republish")
-        if not task.rewritten_title or not task.rewritten_content:
-            raise ValueError("Task has no rewritten content to republish")
+        ensure_task_can_republish(task)
 
     try:
         await _update_task(
@@ -375,8 +389,7 @@ async def retry_from_stage(task_id: str):
         task = result.scalar_one_or_none()
         if not task:
             raise ValueError("Task not found")
-        if task.status != TaskStatus.failed or not task.failed_stage:
-            raise ValueError("Task is not retryable")
+        ensure_task_is_retryable(task)
 
         current_stage = task.failed_stage
 

@@ -125,7 +125,7 @@ def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
     assert "BODY:" in prompt
 
 
-def test_validator_rejects_when_original_has_images_but_rewritten_drops_all_images():
+def test_rewritten_html_validator_rejects_when_original_has_images_but_rewritten_drops_all_images():
     ok, message = validate_rewritten_html(
         "<article><p>Hello</p><img src='a.jpg' /></article>",
         "<article><p>Rewritten</p></article>",
@@ -135,10 +135,20 @@ def test_validator_rejects_when_original_has_images_but_rewritten_drops_all_imag
     assert "image" in message.lower()
 
 
-def test_validator_accepts_when_media_and_code_are_preserved():
+def test_rewritten_html_validator_accepts_when_media_and_code_are_preserved():
     ok, message = validate_rewritten_html(
         "<article><pre><code>x</code></pre><img src='a.jpg' /></article>",
         "<article><pre><code>x</code></pre><img src='a.jpg' /><p>More detail</p></article>",
     )
 
     assert ok is True
+
+
+def test_rewritten_html_validator_accepts_html_fragments_not_starting_with_tag():
+    ok, message = validate_rewritten_html(
+        "<article><img src='a.jpg' /><p>Hello</p></article>",
+        "BODY:\n<p>Rewritten</p><img src='a.jpg' />",
+    )
+
+    assert ok is True
+    assert message == "OK"

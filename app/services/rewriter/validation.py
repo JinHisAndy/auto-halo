@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 
 def _looks_like_html(content: str) -> bool:
     stripped = (content or "").strip()
-    return stripped.startswith("<") and ">" in stripped
+    return "<" in stripped and ">" in stripped
 
 
 def _has_tag(content: str, tag_name: str) -> bool:

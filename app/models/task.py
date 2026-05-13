@@ -40,6 +40,7 @@ class Task(Base):
     original_content = Column(Text, nullable=True)
     rewritten_content = Column(Text, nullable=True)
     rewritten_title = Column(String(500), nullable=True)
+    generated_tags = Column(JSON, nullable=True)
     failed_stage = Column(String(50), nullable=True)
     trigger_source = Column(String(20), nullable=False, default="ui")
     halo_post_id = Column(String(200), nullable=True)

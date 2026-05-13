@@ -38,6 +38,7 @@ class TaskResponse(BaseModel):
     original_content: Optional[str]
     rewritten_content: Optional[str]
     rewritten_title: Optional[str] = None
+    generated_tags: Optional[list[dict]] = None
     failed_stage: Optional[str] = None
     trigger_source: str = "ui"
     halo_post_id: Optional[str]

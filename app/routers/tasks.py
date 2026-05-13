@@ -86,6 +86,40 @@ async def get_task(task_id: str):
     return TaskResponse.model_validate(task)
 
 
+@router.post("/{task_id}/retry")
+async def retry_task(task_id: str, background_tasks: BackgroundTasks):
+    async with async_session() as db:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status != TaskStatus.failed or not task.failed_stage:
+            raise HTTPException(status_code=400, detail="Task is not retryable")
+
+    from app.services.pipeline import retry_from_stage
+
+    background_tasks.add_task(retry_from_stage, task_id)
+    return {"message": "已加入重试队列"}
+
+
+@router.post("/{task_id}/republish")
+async def republish_task(task_id: str, background_tasks: BackgroundTasks):
+    async with async_session() as db:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+        if task.status not in (TaskStatus.completed, TaskStatus.failed):
+            raise HTTPException(status_code=400, detail="Task status does not support republish")
+        if not task.rewritten_title or not task.rewritten_content:
+            raise HTTPException(status_code=400, detail="Task has no rewritten content to republish")
+
+    from app.services.pipeline import republish_task_content
+
+    background_tasks.add_task(republish_task_content, task_id)
+    return {"message": "已加入重发队列"}
+
+
 @router.delete("/{task_id}")
 async def delete_task(task_id: str):
     async with async_session() as db:

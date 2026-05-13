@@ -38,6 +38,88 @@ async def _get_config(db_session, key: str) -> dict | None:
     return None
 
 
+async def republish_task_content(task_id: str):
+    from app.services.publisher.halo_client import halo_client
+
+    async with async_session() as db:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            raise ValueError("Task not found")
+        if task.status not in (TaskStatus.completed, TaskStatus.failed):
+            raise ValueError("Task status does not support republish")
+        if not task.rewritten_title or not task.rewritten_content:
+            raise ValueError("Task has no rewritten content to republish")
+
+    try:
+        await _update_task(
+            task_id,
+            status=TaskStatus.publishing,
+            progress=85,
+            error_msg=None,
+            failed_stage=None,
+            stage_detail="正在发布到Halo...",
+        )
+        await _broadcast_update(task_id, "publishing", 85, "正在发布到Halo...")
+
+        async with async_session() as db:
+            result = await db.execute(select(Task).where(Task.id == task_id))
+            task = result.scalar_one()
+            post_id = await halo_client.publish(db, task.rewritten_title, task.rewritten_content)
+
+        await _update_task(
+            task_id,
+            status=TaskStatus.completed,
+            progress=100,
+            halo_post_id=post_id,
+            error_msg=None,
+            failed_stage=None,
+            stage_detail="已完成",
+        )
+        await _broadcast_update(task_id, "completed", 100, "已完成")
+    except Exception as e:
+        logger.exception(f"Republish failed for task {task_id}")
+        await _update_task(
+            task_id,
+            status=TaskStatus.failed,
+            failed_stage="publishing",
+            error_msg=str(e),
+            stage_detail=f"失败: {str(e)}",
+        )
+        await _broadcast_update(task_id, "failed", 0, f"失败: {str(e)}")
+
+
+async def retry_from_stage(task_id: str):
+    async with async_session() as db:
+        result = await db.execute(select(Task).where(Task.id == task_id))
+        task = result.scalar_one_or_none()
+        if not task:
+            raise ValueError("Task not found")
+        if task.status != TaskStatus.failed or not task.failed_stage:
+            raise ValueError("Task is not retryable")
+
+        if task.failed_stage == "publishing":
+            await republish_task_content(task_id)
+            return
+
+        urls = list(task.urls or [])
+        provider_key = task.model_provider
+        model_name = task.model_name
+        keep_citations = task.keep_citations
+        publish_type = task.publish_type.value if isinstance(task.publish_type, PublishType) else str(task.publish_type)
+        scheduled_at = task.scheduled_at.isoformat() if task.scheduled_at else None
+
+    await run_pipeline(
+        task_id=task_id,
+        urls=urls,
+        provider_key=provider_key,
+        model_name=model_name,
+        keep_citations=keep_citations,
+        publish_type=publish_type,
+        scheduled_at=scheduled_at,
+    )
+
+
 async def run_pipeline(
     task_id: str,
     urls: list[str],

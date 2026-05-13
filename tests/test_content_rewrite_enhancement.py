@@ -248,4 +248,6 @@ def test_publish_source_paths_thread_generated_tags_into_halo_publish_calls():
 
 def test_task_list_template_contains_generated_tag_preview():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
-    assert "generated_tags" in source
+    assert 'x-show="task.generated_tags && task.generated_tags.length"' in source
+    assert 'x-for="tag in task.generated_tags"' in source
+    assert 'x-text="tag.name"' in source

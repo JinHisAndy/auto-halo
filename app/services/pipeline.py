@@ -1,13 +1,17 @@
 import json
 import logging
+import re
 from datetime import datetime, timezone
 
+from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app.db import async_session
 from app.models.task import Task, TaskStatus, PublishType
 from app.models.system_config import SystemConfig
 from app.services.rewriter.prompt_builder import extract_title_and_body
+from app.services.rewriter.validation import validate_rewritten_html
+from app.services.tagging.service import build_tag_records
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +21,19 @@ class StageExecutionError(Exception):
         super().__init__(str(original))
         self.stage = stage
         self.original = original
+
+
+def _build_generated_tags(rewritten_title: str, rewritten_body: str) -> list[dict]:
+    text = BeautifulSoup(rewritten_body or "", "html.parser").get_text(" ", strip=True)
+    candidates: list[str] = []
+
+    for value in re.findall(r"[A-Za-z][A-Za-z0-9+#.-]{2,}|[\u4e00-\u9fff]{2,8}", f"{rewritten_title or ''} {text}"):
+        if value not in candidates:
+            candidates.append(value)
+        if len(candidates) >= 6:
+            break
+
+    return build_tag_records(candidates)
 
 
 def ensure_task_is_retryable(task: Task) -> None:
@@ -137,6 +154,7 @@ async def _rewrite_from_source(
     scheduled_at: str | None,
     source_title: str,
     rewrite_source: str,
+    source_validation_html: str | None = None,
 ):
     from app.services.rewriter.factory import RewriterFactory
     from app.services.storage.minio_client import minio_storage
@@ -161,11 +179,17 @@ async def _rewrite_from_source(
         )
         rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations)
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
+        ok, message = validate_rewritten_html(source_validation_html or rewrite_source, rewritten_body)
+        if not ok:
+            raise ValueError(message)
+
+        generated_tags = _build_generated_tags(rewritten_title, rewritten_body)
 
         await _update_task(
             task_id,
             rewritten_title=rewritten_title,
             rewritten_content=rewritten_body,
+            generated_tags=generated_tags,
             stage_detail="正在备份重写稿到MinIO...",
             progress=75,
         )
@@ -257,6 +281,7 @@ async def _retry_from_parsing(
             scheduled_at=scheduled_at,
             source_title=parsed.title,
             rewrite_source=parsed.rich_html or parsed.clean_text,
+            source_validation_html=parsed.rich_html,
         )
     except Exception as e:
         if isinstance(e, StageExecutionError):
@@ -296,6 +321,7 @@ async def _retry_from_rewriting(
         scheduled_at=scheduled_at,
         source_title=task.title,
         rewrite_source=task.original_content,
+        source_validation_html=task.original_content,
     )
 
 
@@ -570,6 +596,7 @@ async def run_pipeline(
             scheduled_at=scheduled_at,
             source_title=parsed.title,
             rewrite_source=rewrite_source,
+            source_validation_html=parsed.rich_html,
         )
 
     except Exception as e:

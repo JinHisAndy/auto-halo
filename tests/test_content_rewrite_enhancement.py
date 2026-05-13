@@ -183,3 +183,9 @@ def test_rewritten_html_validator_rejects_non_html_angle_bracket_text():
 
     assert ok is False
     assert "html" in message.lower()
+
+
+def test_pipeline_source_validates_rewritten_html_and_persists_generated_tags():
+    source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert "validate_rewritten_html(" in source
+    assert "generated_tags=" in source

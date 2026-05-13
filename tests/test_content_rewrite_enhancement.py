@@ -107,13 +107,16 @@ def test_ensure_task1_task_columns_adds_generated_tags_for_existing_sqlite_db(tm
 def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
     prompt = build_rewrite_prompt("<article><p>Hello</p><img src='a.jpg' /></article>")
     prompt_lower = prompt.lower()
+    expected_preserve_tags_line = (
+        "- preserve these tags and their intent: img, video, audio, source, a, pre, code, "
+        "table, ul, ol, blockquote"
+    )
 
     assert "experienced technical blogger" in prompt_lower or "技术读者" in prompt
     assert "更丰富、更完整" in prompt or "more complete" in prompt_lower
     assert "不得编造事实" in prompt or "accurate" in prompt_lower
     assert "preserve these tags and their intent" in prompt_lower
-    for tag in ("img", "video", "audio", "source", "a", "pre", "code", "table", "ul", "ol", "blockquote"):
-        assert tag in prompt
+    assert expected_preserve_tags_line in prompt
     assert "do not remove media tags" in prompt_lower or "不要删除媒体标签" in prompt
     assert "do not rewrite code blocks into prose" in prompt_lower or "不要改写成普通文字" in prompt
     assert "严格遵循以下格式" in prompt or "strictly follow" in prompt_lower

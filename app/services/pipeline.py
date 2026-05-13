@@ -7,6 +7,7 @@ from sqlalchemy import select
 from app.db import async_session
 from app.models.task import Task, TaskStatus, PublishType
 from app.models.system_config import SystemConfig
+from app.services.rewriter.prompt_builder import extract_title_and_body
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,7 @@ async def run_pipeline(
     publish_type: str,
     scheduled_at: str | None,
 ):
+    current_stage = "fetching"
     try:
         task = await _update_task(task_id, status=TaskStatus.fetching, progress=0)
         await _broadcast_update(task_id, "fetching", 0, "等待开始...")
@@ -75,6 +77,7 @@ async def run_pipeline(
             progress=25,
         )
         await _broadcast_update(task_id, "parsing", 25, "正在解析文章内容和媒体文件...")
+        current_stage = "parsing"
         parsed = await parser_service.parse(content)
 
         await _update_task(
@@ -101,6 +104,7 @@ async def run_pipeline(
             progress=55,
         )
         await _broadcast_update(task_id, "rewriting", 55, "AI正在重写文章...")
+        current_stage = "rewriting"
 
         from app.services.rewriter.factory import RewriterFactory
         rewriter = RewriterFactory.create(
@@ -110,27 +114,30 @@ async def run_pipeline(
             model_name,
         )
         rewrite_source = parsed.rich_html or parsed.clean_text
-        rewritten = await rewriter.rewrite(rewrite_source, keep_citations)
+        rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations)
+        rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, parsed.title)
 
         await _update_task(
             task_id,
-            rewritten_content=rewritten,
+            rewritten_title=rewritten_title,
+            rewritten_content=rewritten_body,
             stage_detail="正在备份重写稿到MinIO...",
             progress=75,
         )
         await _broadcast_update(task_id, "rewriting", 75, "正在备份重写稿到MinIO...")
 
         async with async_session() as db:
-            rewritten_path = await minio_storage.save_rewritten(db, parsed.title, rewritten)
+            rewritten_path = await minio_storage.save_rewritten(db, rewritten_title, rewritten_body)
 
         await _update_task(task_id, minio_rewritten_path=rewritten_path)
 
         if publish_type == "immediate":
             await _update_task(task_id, status=TaskStatus.publishing, progress=85)
             await _broadcast_update(task_id, "publishing", 85, "正在发布到Halo...")
+            current_stage = "publishing"
 
             async with async_session() as db:
-                post_id = await halo_client.publish(db, parsed.title, rewritten)
+                post_id = await halo_client.publish(db, rewritten_title, rewritten_body)
 
             await _update_task(
                 task_id,
@@ -159,6 +166,7 @@ async def run_pipeline(
         await _update_task(
             task_id,
             status=TaskStatus.failed,
+            failed_stage=current_stage,
             error_msg=str(e),
             stage_detail=f"失败: {str(e)}",
         )

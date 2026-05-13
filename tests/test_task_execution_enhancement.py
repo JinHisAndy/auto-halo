@@ -175,3 +175,9 @@ def test_rewriter_providers_preserve_structured_model_output(monkeypatch):
     for provider in providers:
         result = asyncio.run(provider.rewrite("<p>Hello</p>"))
         assert result == structured_output
+
+
+def test_pipeline_source_persists_rewritten_title_and_failed_stage():
+    source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert "rewritten_title=" in source
+    assert "failed_stage" in source

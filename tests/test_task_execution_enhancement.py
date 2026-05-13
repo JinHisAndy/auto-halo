@@ -15,7 +15,7 @@ sys.modules.setdefault(
     ),
 )
 
-from app.db import ensure_task1_task_columns
+from app.db import async_session, engine, ensure_task1_task_columns
 from app.schemas.task import TaskResponse
 
 
@@ -50,6 +50,12 @@ def test_task_response_supports_retry_metadata_and_rewritten_title():
     assert task.failed_stage == "publishing"
     assert task.trigger_source == "ui"
     assert task.rewritten_title == "Rewritten title"
+
+
+def test_async_session_is_initialized_at_import_time():
+    assert engine is not None
+    assert async_session is not None
+    assert callable(async_session)
 
 
 def test_ensure_task1_task_columns_adds_missing_columns_for_existing_sqlite_db(tmp_path):

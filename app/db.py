@@ -25,19 +25,11 @@ def ensure_task1_task_columns(connection):
             connection.execute(text(ddl))
 
 
-engine = None
-async_session = None
-
-
-def _ensure_runtime_objects():
-    global engine, async_session
-    if engine is None:
-        engine = create_async_engine(settings.database_url, echo=False)
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+engine = create_async_engine(settings.database_url, echo=False)
+async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def get_db():
-    _ensure_runtime_objects()
     async with async_session() as session:
         try:
             yield session
@@ -46,7 +38,6 @@ async def get_db():
 
 
 async def init_db():
-    _ensure_runtime_objects()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(ensure_task1_task_columns)

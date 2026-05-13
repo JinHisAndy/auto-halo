@@ -291,7 +291,7 @@ def test_pipeline_source_persists_rewritten_title_and_failed_stage():
     assert "extract_title_and_body(" in source
     assert "rewritten_title=" in source
     assert "rewritten_content=" in source
-    assert "halo_client.publish(db, rewritten_title, rewritten_body)" in source
+    assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in source
     assert 'current_stage = "scheduled"' in source
     assert "failed_stage=current_stage" in source
 
@@ -357,20 +357,28 @@ def test_republish_rejects_missing_rewritten_title_or_content(overrides):
 def test_republish_allows_legacy_task_with_original_title_fallback(monkeypatch):
     published = {}
 
-    async def fake_publish(db, title, body):
+    async def fake_publish(db, title, body, tags=None):
         published["title"] = title
         published["body"] = body
+        published["tags"] = tags
         return "halo-post-1"
 
     monkeypatch.setattr("app.services.publisher.halo_client.halo_client.publish", fake_publish)
 
-    task_id = asyncio.run(_create_task(rewritten_title=None, title="Original fallback title"))
+    task_id = asyncio.run(
+        _create_task(
+            rewritten_title=None,
+            title="Original fallback title",
+            generated_tags=[{"name": "Ops", "color": "blue"}],
+        )
+    )
 
     asyncio.run(republish_task_content(task_id))
 
     assert published == {
         "title": "Original fallback title",
         "body": "<p>rewritten</p>",
+        "tags": [{"name": "Ops", "color": "blue"}],
     }
 
 
@@ -390,7 +398,7 @@ def test_retry_rejects_invalid_task_state(status, failed_stage):
 
 def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_failed_stage():
     source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
-    assert "halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)" in source
+    assert "halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content, tags=task.generated_tags)" in source
     assert 'task.failed_stage = "publishing"' in source
 
 

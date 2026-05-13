@@ -386,7 +386,12 @@ async def republish_task_content(task_id: str):
         async with async_session() as db:
             result = await db.execute(select(Task).where(Task.id == task_id))
             task = result.scalar_one()
-            post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)
+            post_id = await halo_client.publish(
+                db,
+                task.rewritten_title or task.title,
+                task.rewritten_content,
+                tags=task.generated_tags,
+            )
 
         await _update_task(
             task_id,

@@ -1,9 +1,21 @@
+import sqlite3
+import sys
+import types
 from datetime import datetime, timezone
 from pathlib import Path
-import sys
+
+from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+sys.modules.setdefault(
+    "app.config",
+    types.SimpleNamespace(
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+    ),
+)
+
+from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
 
 
@@ -37,3 +49,55 @@ def test_task_response_supports_generated_tags():
     )
 
     assert task.generated_tags == [{"name": "Linux", "color": "blue"}]
+
+
+def test_ensure_task1_task_columns_adds_generated_tags_for_existing_sqlite_db(tmp_path):
+    db_path = tmp_path / "legacy-tasks.db"
+    sqlite_conn = sqlite3.connect(db_path)
+    try:
+        sqlite_conn.execute(
+            """
+            CREATE TABLE tasks (
+                id VARCHAR(36) PRIMARY KEY,
+                title VARCHAR(500),
+                urls JSON NOT NULL,
+                status VARCHAR(20) NOT NULL,
+                progress INTEGER NOT NULL,
+                stage_detail VARCHAR(500) NOT NULL,
+                error_msg TEXT,
+                keep_citations BOOLEAN NOT NULL,
+                publish_type VARCHAR(20) NOT NULL,
+                scheduled_at DATETIME,
+                minio_original_path VARCHAR(500),
+                minio_rewritten_path VARCHAR(500),
+                original_content TEXT,
+                rewritten_content TEXT,
+                rewritten_title VARCHAR(500),
+                failed_stage VARCHAR(50),
+                trigger_source VARCHAR(20) NOT NULL DEFAULT 'ui',
+                halo_post_id VARCHAR(200),
+                model_provider VARCHAR(50) NOT NULL,
+                model_name VARCHAR(100) NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL
+            )
+            """
+        )
+        sqlite_conn.commit()
+    finally:
+        sqlite_conn.close()
+
+    engine = create_engine(f"sqlite:///{db_path}")
+    try:
+        with engine.begin() as conn:
+            ensure_task1_task_columns(conn)
+
+        with engine.connect() as conn:
+            columns = {
+                row[1]: row for row in conn.execute(text("PRAGMA table_info(tasks)"))
+            }
+    finally:
+        engine.dispose()
+
+    assert "generated_tags" in columns
+    assert columns["generated_tags"][2] == "JSON"

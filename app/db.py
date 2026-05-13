@@ -9,6 +9,7 @@ Base = declarative_base()
 
 TASK1_TASK_COLUMNS = {
     "rewritten_title": 'ALTER TABLE tasks ADD COLUMN rewritten_title VARCHAR(500)',
+    "generated_tags": 'ALTER TABLE tasks ADD COLUMN generated_tags JSON',
     "failed_stage": 'ALTER TABLE tasks ADD COLUMN failed_stage VARCHAR(50)',
     "trigger_source": "ALTER TABLE tasks ADD COLUMN trigger_source VARCHAR(20) NOT NULL DEFAULT 'ui'",
 }

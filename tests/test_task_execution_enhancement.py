@@ -133,6 +133,11 @@ def test_build_retry_title_for_duplicate_publish():
     assert build_retry_title("技术文章", 2) == "技术文章（重发2）"
 
 
+def test_duplicate_name_retry_titles_are_available_for_publish_loop():
+    titles = [build_retry_title("标题", i) for i in range(1, 4)]
+    assert titles == ["标题（重发版）", "标题（重发2）", "标题（重发3）"]
+
+
 def test_build_rewrite_prompt_requests_structured_title_and_body_output():
     prompt = build_rewrite_prompt("<p>Hello</p>", keep_citations=False, content_format="html")
 
@@ -191,3 +196,9 @@ def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_fail
     source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
     assert "halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)" in source
     assert 'task.failed_stage = "publishing"' in source
+
+
+def test_halo_client_source_contains_duplicate_name_retry_loop():
+    source = Path("app/services/publisher/halo_client.py").read_text(encoding="utf-8")
+    assert "名称重复" in source or "重复的名称" in source
+    assert "for attempt in range(1, 6)" in source

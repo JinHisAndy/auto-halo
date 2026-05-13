@@ -4,6 +4,7 @@ from slugify import slugify
 def build_halo_payload(title: str, content_html: str, publish_time=None) -> dict:
     slug = slugify(title, max_length=80)
     publish = publish_time is None
+
     return {
         "post": {
             "spec": {
@@ -20,7 +21,7 @@ def build_halo_payload(title: str, content_html: str, publish_time=None) -> dict
                 "excerpt": {"autoGenerate": True, "raw": ""},
                 "categories": [],
                 "tags": [],
-                "htmlMetas": []
+                "htmlMetas": [],
             },
             "apiVersion": "content.halo.run/v1alpha1",
             "kind": "Post",
@@ -29,6 +30,6 @@ def build_halo_payload(title: str, content_html: str, publish_time=None) -> dict
         "content": {
             "raw": content_html,
             "content": content_html,
-            "rawType": "HTML"
+            "rawType": "HTML",
         },
     }

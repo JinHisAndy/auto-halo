@@ -4,6 +4,7 @@ import httpx
 from sqlalchemy import select
 
 from app.models.system_config import SystemConfig
+from app.services.publisher.conflict_resolution import build_retry_title
 from app.services.publisher.payloads import build_halo_payload
 
 
@@ -43,22 +44,31 @@ class HaloClient:
         site_url = config["site_url"].rstrip("/")
         api_token = config["api_token"]
 
-        payload = self._build_payload(title, content_html, publish_time)
-        slug = payload["post"]["metadata"]["name"]
+        base_title = title
+        current_title = title
 
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(
-                f"{site_url}/apis/api.console.halo.run/v1alpha1/posts",
-                headers={
-                    "Authorization": f"Bearer {api_token}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-            if not resp.is_success:
+            for attempt in range(1, 6):
+                payload = self._build_payload(current_title, content_html, publish_time)
+                slug = payload["post"]["metadata"]["name"]
+
+                resp = await client.post(
+                    f"{site_url}/apis/api.console.halo.run/v1alpha1/posts",
+                    headers={
+                        "Authorization": f"Bearer {api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=payload,
+                )
+                if resp.is_success:
+                    data = resp.json()
+                    return data.get("metadata", {}).get("name", slug)
+                if "名称重复" in resp.text or "重复的名称" in resp.text:
+                    current_title = build_retry_title(base_title, attempt)
+                    continue
                 raise Exception(f"Halo 发布失败 (HTTP {resp.status_code}): {resp.text}")
-            data = resp.json()
-            return data.get("metadata", {}).get("name", slug)
+
+        raise Exception("Halo 名称重复，自动重试 5 次后仍失败")
 
 
 halo_client = HaloClient()

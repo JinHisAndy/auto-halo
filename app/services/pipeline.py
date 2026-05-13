@@ -132,9 +132,9 @@ async def run_pipeline(
         await _update_task(task_id, minio_rewritten_path=rewritten_path)
 
         if publish_type == "immediate":
+            current_stage = "publishing"
             await _update_task(task_id, status=TaskStatus.publishing, progress=85)
             await _broadcast_update(task_id, "publishing", 85, "正在发布到Halo...")
-            current_stage = "publishing"
 
             async with async_session() as db:
                 post_id = await halo_client.publish(db, rewritten_title, rewritten_body)
@@ -148,6 +148,7 @@ async def run_pipeline(
             )
             await _broadcast_update(task_id, "completed", 100, "已完成")
         else:
+            current_stage = "scheduled"
             scheduled_dt = datetime.fromisoformat(scheduled_at) if scheduled_at else None
             await _update_task(
                 task_id,

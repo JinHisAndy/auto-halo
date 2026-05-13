@@ -179,5 +179,9 @@ def test_rewriter_providers_preserve_structured_model_output(monkeypatch):
 
 def test_pipeline_source_persists_rewritten_title_and_failed_stage():
     source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert "extract_title_and_body(" in source
     assert "rewritten_title=" in source
-    assert "failed_stage" in source
+    assert "rewritten_content=" in source
+    assert "halo_client.publish(db, rewritten_title, rewritten_body)" in source
+    assert 'current_stage = "scheduled"' in source
+    assert "failed_stage=current_stage" in source

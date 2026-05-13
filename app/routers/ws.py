@@ -8,17 +8,23 @@ class WebSocketManager:
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         data = await websocket.receive_text()
+        await self.handle_message(websocket, data)
+
+    async def handle_message(self, websocket: WebSocket, data: str):
         msg = json.loads(data)
         if msg.get("type") == "subscribe":
             task_ids = msg.get("task_ids", [])
+            self.disconnect(websocket)
             for tid in task_ids:
                 if tid not in self._connections:
                     self._connections[tid] = []
-                self._connections[tid].append(websocket)
+                if websocket not in self._connections[tid]:
+                    self._connections[tid].append(websocket)
         else:
             if "_all" not in self._connections:
                 self._connections["_all"] = []
-            self._connections["_all"].append(websocket)
+            if websocket not in self._connections["_all"]:
+                self._connections["_all"].append(websocket)
 
     def disconnect(self, websocket: WebSocket):
         for tid in list(self._connections.keys()):
@@ -51,6 +57,7 @@ async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
     try:
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            await ws_manager.handle_message(websocket, data)
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket)

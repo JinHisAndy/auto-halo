@@ -386,5 +386,16 @@ def test_task_list_template_contains_source_badges_and_retry_actions():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
     assert "UI创建" in source
     assert "API创建" in source
+    assert "未知来源" in source
+    assert "sourceLabel(task.trigger_source)" in source
     assert "重试" in source
     assert "重新发布" in source
+    assert "refreshTaskSubscriptions()" in source
+    assert "response.ok" in source
+    assert "extractActionError" in source
+
+
+def test_websocket_router_handles_followup_subscription_messages():
+    source = Path("app/routers/ws.py").read_text(encoding="utf-8")
+    assert "async def handle_message(" in source
+    assert "await ws_manager.handle_message(websocket, data)" in source

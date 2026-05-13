@@ -10,7 +10,7 @@
                     <div>
                         <h3 class="font-semibold text-gray-800" x-text="task.title || '未命名任务'"></h3>
                         <span class="inline-flex mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700"
-                            x-text="task.trigger_source === 'api' ? 'API创建' : 'UI创建'"></span>
+                            x-text="sourceLabel(task.trigger_source)"></span>
                     </div>
                     <span class="px-2.5 py-0.5 rounded-full text-xs font-medium"
                         :class="statusClass(task.status)"
@@ -74,6 +74,7 @@ function taskList() {
             const resp = await fetch('/api/tasks');
             const data = await resp.json();
             this.tasks = data.tasks || [];
+            this.refreshTaskSubscriptions();
         },
 
         connectWs() {
@@ -81,10 +82,7 @@ function taskList() {
             this.ws = new WebSocket(protocol + '//' + location.host + '/ws/tasks');
 
             this.ws.onopen = () => {
-                const activeIds = this.tasks.filter(t => !['completed', 'failed'].includes(t.status)).map(t => t.id);
-                if (activeIds.length > 0) {
-                    this.ws.send(JSON.stringify({ type: 'subscribe', task_ids: activeIds }));
-                }
+                this.refreshTaskSubscriptions();
             };
 
             this.ws.onmessage = (event) => {
@@ -107,12 +105,30 @@ function taskList() {
             };
         },
 
+        refreshTaskSubscriptions() {
+            const activeIds = this.tasks.filter(t => !['completed', 'failed'].includes(t.status)).map(t => t.id);
+            if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+                this.connectWs();
+                return;
+            }
+            if (this.ws.readyState !== WebSocket.OPEN) return;
+            this.ws.send(JSON.stringify({ type: 'subscribe', task_ids: activeIds }));
+        },
+
         statusLabel(status) {
             const map = {
                 fetching: '抓取中', parsing: '解析中', rewriting: '重写中',
                 publishing: '发布中', scheduled: '定时发布中', completed: '已完成', failed: '失败'
             };
             return map[status] || status;
+        },
+
+        sourceLabel(source) {
+            const map = {
+                ui: 'UI创建',
+                api: 'API创建'
+            };
+            return map[source] || '未知来源';
         },
 
         statusClass(status) {
@@ -161,14 +177,34 @@ function taskList() {
             }
         },
 
+        async extractActionError(response, fallbackMessage) {
+            try {
+                const data = await response.json();
+                return data.detail || data.message || fallbackMessage;
+            } catch (e) {
+                const text = await response.text();
+                return text || response.statusText || fallbackMessage;
+            }
+        },
+
         async retryTask(taskId) {
-            await fetch(`/api/tasks/${taskId}/retry`, { method: 'POST' });
+            const response = await fetch(`/api/tasks/${taskId}/retry`, { method: 'POST' });
+            if (!response.ok) {
+                alert(await this.extractActionError(response, '重试失败'));
+                return;
+            }
             await this.loadTasks();
+            this.refreshTaskSubscriptions();
         },
 
         async republishTask(taskId) {
-            await fetch(`/api/tasks/${taskId}/republish`, { method: 'POST' });
+            const response = await fetch(`/api/tasks/${taskId}/republish`, { method: 'POST' });
+            if (!response.ok) {
+                alert(await this.extractActionError(response, '重新发布失败'));
+                return;
+            }
             await this.loadTasks();
+            this.refreshTaskSubscriptions();
         },
     }
 }

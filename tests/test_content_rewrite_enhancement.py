@@ -17,6 +17,7 @@ sys.modules.setdefault(
 
 from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
+from app.services.rewriter.prompt_builder import build_rewrite_prompt
 
 
 def test_task_response_supports_generated_tags():
@@ -101,3 +102,11 @@ def test_ensure_task1_task_columns_adds_generated_tags_for_existing_sqlite_db(tm
 
     assert "generated_tags" in columns
     assert columns["generated_tags"][2] == "JSON"
+
+
+def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
+    prompt = build_rewrite_prompt("<article><p>Hello</p><img src='a.jpg' /></article>")
+    assert "experienced technical blogger" in prompt.lower() or "技术" in prompt
+    assert "do not remove media tags" in prompt.lower() or "不要删除媒体标签" in prompt
+    assert "code blocks" in prompt.lower() or "代码块" in prompt
+    assert "more complete" in prompt.lower() or "更完整" in prompt

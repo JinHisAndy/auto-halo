@@ -17,6 +17,7 @@ sys.modules.setdefault(
 
 from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
+from app.services import pipeline
 from app.services.tagging.service import build_tag_records
 from app.services.rewriter.prompt_builder import build_rewrite_prompt
 from app.services.rewriter.validation import validate_rewritten_html
@@ -185,7 +186,34 @@ def test_rewritten_html_validator_rejects_non_html_angle_bracket_text():
     assert "html" in message.lower()
 
 
+def test_build_generated_tags_uses_rewritten_title_and_html_body_text(monkeypatch):
+    captured = {}
+
+    def fake_build_tag_records(names):
+        captured["names"] = names
+        return [{"name": name, "color": "blue"} for name in names]
+
+    monkeypatch.setattr(pipeline, "build_tag_records", fake_build_tag_records)
+
+    tags = pipeline._build_generated_tags(
+        "Rewritten Kubernetes Guide",
+        "<article><p>Deep Docker tuning</p><p>SSH hardening</p></article>",
+    )
+
+    assert captured["names"] == [
+        "Rewritten",
+        "Kubernetes",
+        "Guide",
+        "Deep",
+        "Docker",
+        "tuning",
+    ]
+    assert tags == [{"name": name, "color": "blue"} for name in captured["names"]]
+
+
 def test_pipeline_source_validates_rewritten_html_and_persists_generated_tags():
     source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
     assert "validate_rewritten_html(" in source
+    assert "_build_generated_tags(rewritten_title, rewritten_body)" in source
+    assert 'BeautifulSoup(rewritten_body or "", "html.parser")' in source
     assert "generated_tags=" in source

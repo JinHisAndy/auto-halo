@@ -1,7 +1,7 @@
 import httpx
 
 from app.services.rewriter.base import BaseRewriter
-from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
+from app.services.rewriter.prompt_builder import build_rewrite_prompt
 
 
 class DeepSeekRewriter(BaseRewriter):
@@ -35,8 +35,7 @@ class DeepSeekRewriter(BaseRewriter):
             )
             resp.raise_for_status()
             data = resp.json()
-            _, body = extract_title_and_body(data["choices"][0]["message"]["content"], "")
-            return body
+            return data["choices"][0]["message"]["content"]
 
     async def test_connection(self) -> bool:
         try:

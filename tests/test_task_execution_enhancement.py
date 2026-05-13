@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
 from pathlib import Path
+import asyncio
 import sqlite3
 import sys
 import types
 
+import httpx
 from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -17,6 +19,10 @@ sys.modules.setdefault(
 
 from app.db import async_session, engine, ensure_task1_task_columns
 from app.schemas.task import TaskResponse
+from app.services.rewriter.deepseek import DeepSeekRewriter
+from app.services.rewriter.mofi import MofiRewriter
+from app.services.rewriter.minimax import MiniMaxRewriter
+from app.services.rewriter.openai_rewriter import OpenAIRewriter
 from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
 from app.services.publisher.conflict_resolution import build_retry_title
 
@@ -132,3 +138,40 @@ def test_build_rewrite_prompt_requests_structured_title_and_body_output():
 
     assert "TITLE:" in prompt
     assert "BODY:" in prompt
+
+
+def test_rewriter_providers_preserve_structured_model_output(monkeypatch):
+    structured_output = "TITLE: New title\nBODY:\n<p>Hello</p>"
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": structured_output}}]}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+
+    providers = [
+        OpenAIRewriter("key", "https://example.com", "model"),
+        DeepSeekRewriter("key", "https://example.com", "model"),
+        MofiRewriter("key", "https://example.com", "model"),
+        MiniMaxRewriter("key", "https://example.com", "model"),
+    ]
+
+    for provider in providers:
+        result = asyncio.run(provider.rewrite("<p>Hello</p>"))
+        assert result == structured_output

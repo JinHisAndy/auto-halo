@@ -18,6 +18,7 @@ sys.modules.setdefault(
 from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
 from app.services import pipeline
+from app.services.publisher.payloads import build_halo_payload
 from app.services.tagging.service import build_tag_records
 from app.services.rewriter.prompt_builder import build_rewrite_prompt
 from app.services.rewriter.validation import validate_rewritten_html
@@ -53,6 +54,17 @@ def test_task_response_supports_generated_tags():
     )
 
     assert task.generated_tags == [{"name": "Linux", "color": "blue"}]
+
+
+def test_build_halo_payload_includes_tags_when_present():
+    payload = build_halo_payload(
+        "Title",
+        "<article><p>Hello</p></article>",
+        tags=[{"name": "Linux", "color": "blue"}],
+    )
+
+    assert "tags" in payload["post"]["spec"]
+    assert payload["post"]["spec"]["tags"] == ["Linux"]
 
 
 def test_build_tag_records_assigns_allowed_colors_and_limits_count():

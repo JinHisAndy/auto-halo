@@ -17,11 +17,12 @@ def build_halo_payload(
     content_html: str,
     publish_time=None,
     slug_suffix: str | None = None,
+    tags: list[dict] | None = None,
 ) -> dict:
     slug = _build_slug(title, slug_suffix=slug_suffix)
     publish = publish_time is None
 
-    return {
+    payload = {
         "post": {
             "spec": {
                 "title": title,
@@ -49,3 +50,6 @@ def build_halo_payload(
             "rawType": "HTML",
         },
     }
+
+    payload["post"]["spec"]["tags"] = [tag["name"] for tag in (tags or [])]
+    return payload

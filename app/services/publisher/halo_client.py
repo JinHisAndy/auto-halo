@@ -15,12 +15,14 @@ class HaloClient:
         content_html: str,
         publish_time=None,
         slug_suffix: str | None = None,
+        tags: list[dict] | None = None,
     ) -> dict:
         return build_halo_payload(
             title,
             content_html,
             publish_time,
             slug_suffix=slug_suffix,
+            tags=tags,
         )
 
     async def _load_config(self, db_session) -> dict | None:
@@ -49,7 +51,12 @@ class HaloClient:
             return False, f"Halo 连接失败: {str(e)}"
 
     async def publish(
-        self, db_session, title: str, content_html: str, publish_time=None
+        self,
+        db_session,
+        title: str,
+        content_html: str,
+        publish_time=None,
+        tags: list[dict] | None = None,
     ) -> str:
         config = await self._load_config(db_session)
         site_url = config["site_url"].rstrip("/")
@@ -66,6 +73,7 @@ class HaloClient:
                     content_html,
                     publish_time,
                     slug_suffix=slug_suffix,
+                    tags=tags,
                 )
                 slug = payload["post"]["metadata"]["name"]
 

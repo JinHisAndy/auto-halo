@@ -1,7 +1,7 @@
 import httpx
 
 from app.services.rewriter.base import BaseRewriter
-from app.services.rewriter.prompt_builder import build_rewrite_prompt
+from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
 
 __all__ = ["OpenAIRewriter", "build_rewrite_prompt"]
 
@@ -37,7 +37,8 @@ class OpenAIRewriter(BaseRewriter):
             )
             resp.raise_for_status()
             data = resp.json()
-            return data["choices"][0]["message"]["content"]
+            _, body = extract_title_and_body(data["choices"][0]["message"]["content"], "")
+            return body
 
     async def test_connection(self) -> bool:
         try:

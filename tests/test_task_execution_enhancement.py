@@ -17,6 +17,8 @@ sys.modules.setdefault(
 
 from app.db import async_session, engine, ensure_task1_task_columns
 from app.schemas.task import TaskResponse
+from app.services.rewriter.prompt_builder import build_rewrite_prompt, extract_title_and_body
+from app.services.publisher.conflict_resolution import build_retry_title
 
 
 def test_task_response_supports_retry_metadata_and_rewritten_title():
@@ -111,3 +113,22 @@ def test_ensure_task1_task_columns_adds_missing_columns_for_existing_sqlite_db(t
     assert columns["trigger_source"][2] == "VARCHAR(20)"
     assert columns["trigger_source"][3] == 1
     assert columns["trigger_source"][4] == "'ui'"
+
+
+def test_extract_title_and_body_from_structured_llm_output():
+    title, body = extract_title_and_body("TITLE: New title\nBODY:\n<p>Hello</p>", "Fallback")
+
+    assert title == "New title"
+    assert body == "<p>Hello</p>"
+
+
+def test_build_retry_title_for_duplicate_publish():
+    assert build_retry_title("技术文章", 1) == "技术文章（重发版）"
+    assert build_retry_title("技术文章", 2) == "技术文章（重发2）"
+
+
+def test_build_rewrite_prompt_requests_structured_title_and_body_output():
+    prompt = build_rewrite_prompt("<p>Hello</p>", keep_citations=False, content_format="html")
+
+    assert "TITLE:" in prompt
+    assert "BODY:" in prompt

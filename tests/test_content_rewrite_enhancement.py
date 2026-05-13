@@ -154,6 +154,16 @@ def test_rewritten_html_validator_accepts_html_fragments_not_starting_with_tag()
     assert message == "OK"
 
 
+def test_rewritten_html_validator_accepts_valid_html_with_non_whitelisted_tag():
+    ok, message = validate_rewritten_html(
+        "<article><p>Hello</p></article>",
+        "<details><summary>More</summary></details>",
+    )
+
+    assert ok is True
+    assert message == "OK"
+
+
 def test_rewritten_html_validator_rejects_non_html_angle_bracket_text():
     ok, message = validate_rewritten_html(
         "<article><p>Hello</p></article>",

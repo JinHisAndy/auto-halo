@@ -380,3 +380,11 @@ def test_halo_client_retries_duplicate_names_five_times_with_distinct_retry_name
     assert retry_titles[0] == long_title
     assert retry_titles[1] == build_retry_title(long_title, 1)
     assert retry_titles[-1] == build_retry_title(long_title, 5)
+
+
+def test_task_list_template_contains_source_badges_and_retry_actions():
+    source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
+    assert "UI创建" in source
+    assert "API创建" in source
+    assert "重试" in source
+    assert "重新发布" in source

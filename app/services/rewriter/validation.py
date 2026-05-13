@@ -1,9 +1,53 @@
 from bs4 import BeautifulSoup
 
 
+_BASIC_HTML_TAGS = {
+    "a",
+    "article",
+    "audio",
+    "blockquote",
+    "br",
+    "code",
+    "div",
+    "em",
+    "figcaption",
+    "figure",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "header",
+    "hr",
+    "img",
+    "li",
+    "main",
+    "ol",
+    "p",
+    "pre",
+    "section",
+    "source",
+    "span",
+    "strong",
+    "table",
+    "tbody",
+    "td",
+    "th",
+    "thead",
+    "tr",
+    "ul",
+    "video",
+}
+
+
 def _looks_like_html(content: str) -> bool:
     stripped = (content or "").strip()
-    return "<" in stripped and ">" in stripped
+    if not stripped:
+        return False
+
+    soup = BeautifulSoup(stripped, "html.parser")
+    return any(tag.name in _BASIC_HTML_TAGS for tag in soup.find_all())
 
 
 def _has_tag(content: str, tag_name: str) -> bool:

@@ -53,7 +53,7 @@ class SchedulerService:
             await ws_manager.broadcast_task_update(task_id, "publishing", 95, "正在发布到Halo...")
 
             try:
-                post_id = await halo_client.publish(db, task.title, task.rewritten_content)
+                post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)
 
                 result = await db.execute(select(Task).where(Task.id == task_id))
                 task = result.scalar_one()
@@ -69,6 +69,7 @@ class SchedulerService:
                 result = await db.execute(select(Task).where(Task.id == task_id))
                 task = result.scalar_one()
                 task.status = TaskStatus.failed
+                task.failed_stage = "publishing"
                 task.error_msg = str(e)
                 task.stage_detail = f"发布失败: {str(e)}"
                 task.updated_at = datetime.now(timezone.utc)

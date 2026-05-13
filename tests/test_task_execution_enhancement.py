@@ -185,3 +185,9 @@ def test_pipeline_source_persists_rewritten_title_and_failed_stage():
     assert "halo_client.publish(db, rewritten_title, rewritten_body)" in source
     assert 'current_stage = "scheduled"' in source
     assert "failed_stage=current_stage" in source
+
+
+def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_failed_stage():
+    source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
+    assert "halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)" in source
+    assert 'task.failed_stage = "publishing"' in source

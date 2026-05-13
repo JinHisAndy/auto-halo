@@ -18,6 +18,7 @@ sys.modules.setdefault(
 from app.db import ensure_task1_task_columns
 from app.schemas.task import TaskResponse
 from app.services.rewriter.prompt_builder import build_rewrite_prompt
+from app.services.rewriter.validation import validate_rewritten_html
 
 
 def test_task_response_supports_generated_tags():
@@ -122,3 +123,22 @@ def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
     assert "严格遵循以下格式" in prompt or "strictly follow" in prompt_lower
     assert "TITLE:" in prompt
     assert "BODY:" in prompt
+
+
+def test_validator_rejects_when_original_has_images_but_rewritten_drops_all_images():
+    ok, message = validate_rewritten_html(
+        "<article><p>Hello</p><img src='a.jpg' /></article>",
+        "<article><p>Rewritten</p></article>",
+    )
+
+    assert ok is False
+    assert "image" in message.lower()
+
+
+def test_validator_accepts_when_media_and_code_are_preserved():
+    ok, message = validate_rewritten_html(
+        "<article><pre><code>x</code></pre><img src='a.jpg' /></article>",
+        "<article><pre><code>x</code></pre><img src='a.jpg' /><p>More detail</p></article>",
+    )
+
+    assert ok is True

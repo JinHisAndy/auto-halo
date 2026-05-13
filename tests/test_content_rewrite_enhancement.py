@@ -236,3 +236,11 @@ def test_halo_client_source_threads_tags_through_publish_and_payload_builder():
 
     assert "tags: list[dict] | None = None" in source
     assert "tags=tags," in source
+
+
+def test_publish_source_paths_thread_generated_tags_into_halo_publish_calls():
+    pipeline_source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    scheduler_source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
+
+    assert "post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in pipeline_source
+    assert "post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content, tags=task.generated_tags)" in scheduler_source

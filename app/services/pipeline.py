@@ -106,6 +106,7 @@ async def _publish_or_schedule(
     model_name: str,
     rewritten_title: str,
     rewritten_body: str,
+    generated_tags: list[dict] | None = None,
 ):
     from app.services.publisher.halo_client import halo_client
 
@@ -114,7 +115,7 @@ async def _publish_or_schedule(
         await _broadcast_update(task_id, "publishing", 85, "正在发布到Halo...")
 
         async with async_session() as db:
-            post_id = await halo_client.publish(db, rewritten_title, rewritten_body)
+            post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)
 
         await _update_task(
             task_id,
@@ -211,6 +212,7 @@ async def _rewrite_from_source(
             model_name=model_name,
             rewritten_title=rewritten_title,
             rewritten_body=rewritten_body,
+            generated_tags=generated_tags,
         )
     except Exception as e:
         if isinstance(e, StageExecutionError):

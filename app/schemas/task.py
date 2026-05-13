@@ -28,6 +28,9 @@ class TaskResponse(BaseModel):
     minio_rewritten_path: Optional[str]
     original_content: Optional[str]
     rewritten_content: Optional[str]
+    rewritten_title: Optional[str] = None
+    failed_stage: Optional[str] = None
+    trigger_source: str = "ui"
     halo_post_id: Optional[str]
     model_provider: str
     model_name: str

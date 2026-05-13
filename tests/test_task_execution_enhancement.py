@@ -207,6 +207,23 @@ def test_pipeline_contains_retry_and_republish_helpers():
     assert "async def republish_task_content(task_id: str):" in source
 
 
+def test_pipeline_retry_from_stage_contains_stage_specific_retry_paths():
+    source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert 'if task.failed_stage == "fetching":' in source
+    assert 'if task.failed_stage == "parsing":' in source
+    assert 'if task.failed_stage == "rewriting":' in source
+    assert 'if task.failed_stage == "publishing":' in source
+
+
+def test_pipeline_retry_helpers_preserve_stage_specific_sources():
+    source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert "async def _retry_from_parsing(" in source
+    assert "async def _retry_from_rewriting(" in source
+    assert "task.original_content" in source
+    assert "task.rewritten_title" in source
+    assert "task.rewritten_content" in source
+
+
 def test_scheduler_source_uses_rewritten_title_fallback_and_sets_publishing_failed_stage():
     source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
     assert "halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content)" in source

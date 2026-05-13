@@ -244,3 +244,8 @@ def test_publish_source_paths_thread_generated_tags_into_halo_publish_calls():
 
     assert "post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in pipeline_source
     assert "post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content, tags=task.generated_tags)" in scheduler_source
+
+
+def test_task_list_template_contains_generated_tag_preview():
+    source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
+    assert "generated_tags" in source

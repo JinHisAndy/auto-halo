@@ -25,6 +25,12 @@
 
                 <p class="text-sm text-gray-500 mb-3" x-text="task.stage_detail"></p>
 
+                <div class="flex flex-wrap gap-2 mt-2 mb-3" x-show="task.generated_tags && task.generated_tags.length">
+                    <template x-for="tag in task.generated_tags" :key="tag.name">
+                        <span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700" x-text="tag.name"></span>
+                    </template>
+                </div>
+
                 <div class="flex flex-wrap gap-2 text-sm" x-show="task.status === 'completed' || task.status === 'scheduled' || task.status === 'failed'">
                     <button @click="preview(task, 'original')" class="text-indigo-600 hover:text-indigo-800" x-show="task.original_content">预览原文</button>
                     <button @click="preview(task, 'rewritten')" class="text-indigo-600 hover:text-indigo-800" x-show="task.rewritten_content">预览重写稿</button>

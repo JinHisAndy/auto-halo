@@ -395,6 +395,19 @@ def test_task_list_template_contains_source_badges_and_retry_actions():
     assert "extractActionError" in source
 
 
+def test_task_list_template_initial_load_only_opens_websocket_via_subscription_refresh():
+    source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
+    init_block = source.split("async init() {", 1)[1].split("},", 1)[0]
+    load_tasks_block = source.split("async loadTasks() {", 1)[1].split("},", 1)[0]
+    refresh_block = source.split("refreshTaskSubscriptions() {", 1)[1].split("},", 1)[0]
+
+    assert "await this.loadTasks();" in init_block
+    assert "this.connectWs();" not in init_block
+    assert "this.refreshTaskSubscriptions();" in load_tasks_block
+    assert "if (!this.ws || this.ws.readyState === WebSocket.CLOSED)" in refresh_block
+    assert "this.connectWs();" in refresh_block
+
+
 def test_websocket_router_handles_followup_subscription_messages():
     source = Path("app/routers/ws.py").read_text(encoding="utf-8")
     assert "async def handle_message(" in source

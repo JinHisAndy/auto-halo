@@ -159,6 +159,26 @@ def test_get_config_returns_mapped_open_api_fields():
     assert response.json()["default_model_name"] == "gpt-4.1"
 
 
+def test_get_config_accepts_legacy_default_model_name_field():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "name": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.get("/api/config")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert response.json()["default_model_provider"] == "openai"
+    assert response.json()["default_model_name"] == "gpt-4.1"
+
+
 def test_open_api_task_create_response_schema_fields():
     payload = OpenApiTaskCreateResponse.model_validate(
         {

@@ -46,7 +46,7 @@ async def get_config():
             open_api_key = value if isinstance(value, str) else value.get("key")
         elif row.key == "open_api.default_model":
             default_model_provider = value.get("provider")
-            default_model_name = value.get("model")
+            default_model_name = value.get("model") or value.get("name")
 
     return ConfigResponse(
         providers=providers,

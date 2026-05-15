@@ -10,7 +10,7 @@
             <template x-for="(provider, pidx) in providers" :key="pidx">
                 <div class="border rounded-lg p-4 mb-3">
                     <div class="flex justify-between items-center mb-3">
-                        <input type="text" x-model="provider.name" class="font-medium border rounded px-2 py-1 text-sm" placeholder="供应商名称">
+                        <input type="text" x-model="provider.name" @input="repairDefaultModelSelection()" class="font-medium border rounded px-2 py-1 text-sm" placeholder="供应商名称">
                         <button @click="removeProvider(pidx)" class="text-red-500 text-sm hover:text-red-700">删除</button>
                     </div>
                     <div class="space-y-2">
@@ -153,21 +153,38 @@ this.providers = cfg.providers.map(p => ({
             this.openApiKey = cfg.open_api_key || '';
             this.defaultModelProvider = cfg.default_model_provider || '';
             this.defaultModelName = cfg.default_model_name || '';
+            this.repairDefaultModelSelection();
         },
 
 addProvider() {
             this.providers.push({ name: '', api_key: '', base_url: '', models: [], selectedModel: '', testing: false });
+            this.repairDefaultModelSelection();
         },
 
-        removeProvider(idx) { this.providers.splice(idx, 1); },
+        removeProvider(idx) { this.providers.splice(idx, 1); this.repairDefaultModelSelection(); },
 
         addPreset(preset) {
             this.providers.push({ ...preset, models: [], selectedModel: '', testing: false });
+            this.repairDefaultModelSelection();
+        },
+
+        getDefaultProvider() {
+            return this.providers.find(p => p.name && p.name.toLowerCase() === this.defaultModelProvider);
         },
 
         getDefaultProviderModels() {
-            const provider = this.providers.find(p => p.name && p.name.toLowerCase() === this.defaultModelProvider);
+            const provider = this.getDefaultProvider();
             return provider ? (provider.models || []) : [];
+        },
+
+        repairDefaultModelSelection() {
+            const provider = this.getDefaultProvider();
+            if (!provider) {
+                this.defaultModelProvider = '';
+                this.defaultModelName = '';
+                return;
+            }
+            this.syncDefaultModelSelection();
         },
 
         syncDefaultModelSelection() {

@@ -548,6 +548,20 @@ def test_settings_template_contains_open_api_key_and_default_model_section():
     assert "默认模型" in source or "default model" in source.lower()
 
 
+def test_settings_template_repairs_invalid_default_selection_after_provider_changes():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "repairDefaultModelSelection()" in source
+    assert '@input="repairDefaultModelSelection()"' in source
+    assert "removeProvider(idx) { this.providers.splice(idx, 1); this.repairDefaultModelSelection(); }" in source
+
+
+def test_settings_template_clears_stale_default_provider_and_model_when_provider_missing():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "this.defaultModelProvider = '';" in source
+    assert "this.defaultModelName = '';" in source
+    assert "const provider = this.getDefaultProvider();" in source
+
+
 def test_open_api_docs_page_and_route_exist():
     template = Path("app/templates/open_api_docs.html")
     assert template.exists()

@@ -253,6 +253,12 @@ def test_post_open_api_tasks_with_wrong_api_key_returns_403():
 def test_post_open_api_tasks_with_valid_api_key_succeeds():
     asyncio.run(_reset_system_config_table())
     asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "model": "gpt-4.1"},
+        )
+    )
 
     client = _test_client()
     try:
@@ -268,10 +274,84 @@ def test_post_open_api_tasks_with_valid_api_key_succeeds():
 
     assert response.status_code in {200, 201}
     assert response.json()["trigger_source"] == "api"
-    assert response.json()["status"] == "accepted"
+    assert response.json()["status"] == "fetching"
+
+
+def test_post_open_api_tasks_uses_default_model_when_request_omits_model_fields():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "model": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code in {200, 201}
+    assert response.json()["trigger_source"] == "api"
+    assert response.json()["status"] == "fetching"
+
+
+def test_post_open_api_tasks_rejects_partial_model_selection():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+                "model_provider": "openai",
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "model_provider" in response.json()["detail"]
+
+
+def test_post_open_api_tasks_requires_default_model_when_request_omits_model_fields():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "default model" in response.json()["detail"].lower()
 
 
 def test_open_api_router_contains_api_key_header_validation_and_task_endpoint():
     source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
     assert 'X-API-Key' in source
     assert '@router.post("/tasks", response_model=OpenApiTaskCreateResponse)' in source
+
+
+def test_open_api_router_uses_default_model_when_request_model_missing_and_sets_trigger_source_api():
+    source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
+    assert 'open_api.default_model' in source
+    assert 'trigger_source="api"' in source or "trigger_source='api'" in source

@@ -12,6 +12,14 @@ from app.routers.tasks import create_task
 router = APIRouter(prefix="/open-api", tags=["open-api"])
 
 
+def _normalize_optional_model_value(value: str | None) -> str | None:
+    if value is None:
+        return None
+
+    normalized = value.strip()
+    return normalized or None
+
+
 async def _require_api_key(x_api_key: str | None):
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Missing X-API-Key header")
@@ -35,11 +43,14 @@ async def _require_api_key(x_api_key: str | None):
 
 
 async def _resolve_model_selection(payload: OpenApiTaskCreateRequest) -> tuple[str, str]:
-    has_provider = payload.model_provider is not None
-    has_model_name = payload.model_name is not None
+    provider = _normalize_optional_model_value(payload.model_provider)
+    model_name = _normalize_optional_model_value(payload.model_name)
+
+    has_provider = provider is not None
+    has_model_name = model_name is not None
 
     if has_provider and has_model_name:
-        return payload.model_provider, payload.model_name
+        return provider, model_name
 
     if has_provider or has_model_name:
         raise HTTPException(

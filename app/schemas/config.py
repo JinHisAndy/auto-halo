@@ -29,6 +29,9 @@ class ConfigResponse(BaseModel):
     minio: Optional[MinioConfig]
     halo: Optional[HaloConfig]
     fetch_mode: str = "http"
+    open_api_key: Optional[str] = None
+    default_model_provider: Optional[str] = None
+    default_model_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -39,6 +42,9 @@ class ConfigSaveRequest(BaseModel):
     minio: Optional[MinioConfig] = None
     halo: Optional[HaloConfig] = None
     fetch_mode: str = "http"
+    open_api_key: Optional[str] = None
+    default_model_provider: Optional[str] = None
+    default_model_name: Optional[str] = None
 
 
 class TestConnectionResponse(BaseModel):

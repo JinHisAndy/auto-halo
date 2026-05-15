@@ -110,7 +110,7 @@ def test_post_config_persists_open_api_key():
         client.close()
 
     assert response.status_code == 200
-    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"value": "secret-key"})
+    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"key": "secret-key"})
 
 
 def test_post_config_persists_open_api_default_model():
@@ -133,17 +133,17 @@ def test_post_config_persists_open_api_default_model():
 
     assert response.status_code == 200
     assert asyncio.run(_get_config_value("open_api.default_model")) == json.dumps(
-        {"provider": "openai", "name": "gpt-4.1"}
+        {"provider": "openai", "model": "gpt-4.1"}
     )
 
 
 def test_get_config_returns_mapped_open_api_fields():
     asyncio.run(_reset_system_config_table())
-    asyncio.run(_seed_config_row("open_api.key", {"value": "secret-key"}))
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
     asyncio.run(
         _seed_config_row(
             "open_api.default_model",
-            {"provider": "openai", "name": "gpt-4.1"},
+            {"provider": "openai", "model": "gpt-4.1"},
         )
     )
 

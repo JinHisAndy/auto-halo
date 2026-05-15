@@ -43,10 +43,10 @@ async def get_config():
         elif row.key == "fetch.mode":
             fetch_mode = value if isinstance(value, str) else value.get("value", "http")
         elif row.key == "open_api.key":
-            open_api_key = value if isinstance(value, str) else value.get("value")
+            open_api_key = value if isinstance(value, str) else value.get("key")
         elif row.key == "open_api.default_model":
             default_model_provider = value.get("provider")
-            default_model_name = value.get("name")
+            default_model_name = value.get("model")
 
     return ConfigResponse(
         providers=providers,
@@ -113,7 +113,7 @@ async def save_config(payload: ConfigSaveRequest):
             db.add(SystemConfig(key=key, value=value))
 
         key = "open_api.key"
-        value = json.dumps({"value": payload.open_api_key})
+        value = json.dumps({"key": payload.open_api_key})
         result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
         row = result.scalar_one_or_none()
         if row:
@@ -125,7 +125,7 @@ async def save_config(payload: ConfigSaveRequest):
         value = json.dumps(
             {
                 "provider": payload.default_model_provider,
-                "name": payload.default_model_name,
+                "model": payload.default_model_name,
             }
         )
         result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))

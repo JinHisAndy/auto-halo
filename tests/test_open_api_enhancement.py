@@ -51,6 +51,12 @@ def test_config_response_supports_open_api_settings():
     assert payload.default_model_name == "gpt-4.1"
 
 
+def test_config_router_persists_open_api_key_and_default_model_fields():
+    source = Path("app/routers/config.py").read_text(encoding="utf-8")
+    assert 'open_api.key' in source
+    assert 'open_api.default_model' in source
+
+
 def test_open_api_task_create_response_schema_fields():
     payload = OpenApiTaskCreateResponse.model_validate(
         {

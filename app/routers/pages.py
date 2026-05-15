@@ -20,3 +20,8 @@ async def page_task_list(request: Request):
 @router.get("/settings", response_class=HTMLResponse)
 async def page_settings(request: Request):
     return templates.TemplateResponse("settings.html", {"request": request})
+
+
+@router.get("/open-api/docs", response_class=HTMLResponse)
+async def page_open_api_docs(request: Request):
+    return templates.TemplateResponse("open_api_docs.html", {"request": request})

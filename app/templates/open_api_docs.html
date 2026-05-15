@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+    <section class="bg-white rounded-lg shadow p-6 space-y-2">
+        <h1 class="text-2xl font-bold">Open API 使用文档</h1>
+        <p class="text-sm text-gray-600">通过内部开放接口创建任务，并使用 <code class="px-1 py-0.5 bg-gray-100 rounded">X-API-Key</code> 进行鉴权。</p>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-6 space-y-3">
+        <h2 class="text-lg font-semibold">API Key 用法</h2>
+        <p class="text-sm text-gray-700">先在系统配置页设置 Open API Key，然后在每次请求头中携带 <code class="px-1 py-0.5 bg-gray-100 rounded">X-API-Key: your-api-key</code>。</p>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-6 space-y-3">
+        <h2 class="text-lg font-semibold">POST /open-api/tasks</h2>
+        <p class="text-sm text-gray-700">创建一个新的抓取任务。最少提供 <code class="px-1 py-0.5 bg-gray-100 rounded">urls</code>，其余字段按需补充。</p>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{
+  "urls": ["https://example.com/post"],
+  "publish_type": "immediate",
+  "keep_citations": false,
+  "model_provider": "openai",
+  "model_name": "gpt-4.1"
+}</code></pre>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-6 space-y-4">
+        <h2 class="text-lg font-semibold">curl 示例</h2>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>curl -X POST "http://localhost:8000/open-api/tasks" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "urls": ["https://example.com/post"],
+    "publish_type": "immediate",
+    "keep_citations": false
+  }'</code></pre>
+
+        <h2 class="text-lg font-semibold">Python requests 示例</h2>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>import requests
+
+response = requests.post(
+    "http://localhost:8000/open-api/tasks",
+    headers={
+        "Content-Type": "application/json",
+        "X-API-Key": "your-api-key",
+    },
+    json={
+        "urls": ["https://example.com/post"],
+        "publish_type": "immediate",
+        "keep_citations": False,
+    },
+)
+
+print(response.status_code)
+print(response.json())</code></pre>
+
+        <h2 class="text-lg font-semibold">JavaScript fetch 示例</h2>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>const response = await fetch("/open-api/tasks", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "X-API-Key": "your-api-key"
+  },
+  body: JSON.stringify({
+    urls: ["https://example.com/post"],
+    publish_type: "immediate",
+    keep_citations: false
+  })
+});
+
+const data = await response.json();
+console.log(response.status, data);</code></pre>
+    </section>
+
+    <section class="bg-white rounded-lg shadow p-6 space-y-4">
+        <h2 class="text-lg font-semibold">成功响应示例</h2>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{
+  "task_id": "task-123",
+  "status": "fetching",
+  "trigger_source": "api",
+  "message": "任务已创建"
+}</code></pre>
+
+        <h2 class="text-lg font-semibold">错误响应示例</h2>
+        <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{
+  "detail": "Missing X-API-Key header"
+}</code></pre>
+    </section>
+</div>
+{% endblock %}

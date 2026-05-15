@@ -546,3 +546,10 @@ def test_settings_template_contains_open_api_key_and_default_model_section():
     assert "Open API" in source
     assert "API Key" in source
     assert "默认模型" in source or "default model" in source.lower()
+
+
+def test_open_api_docs_page_and_route_exist():
+    template = Path("app/templates/open_api_docs.html")
+    assert template.exists()
+    source = Path("app/routers/pages.py").read_text(encoding="utf-8")
+    assert '/open-api/docs' in source

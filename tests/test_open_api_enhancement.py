@@ -28,6 +28,7 @@ from app.models.task import Task
 async def _reset_system_config_table():
     await init_db()
     async with async_session() as db:
+        await db.execute(delete(Task))
         await db.execute(delete(SystemConfig))
         await db.commit()
 
@@ -50,6 +51,12 @@ async def _get_task_model_selection(task_id: str):
         result = await db.execute(select(Task).where(Task.id == task_id))
         task = result.scalar_one()
         return task.model_provider, task.model_name
+
+
+async def _get_task_count() -> int:
+    async with async_session() as db:
+        result = await db.execute(select(Task))
+        return len(result.scalars().all())
 
 
 def _test_client():
@@ -173,9 +180,32 @@ def test_get_config_returns_mapped_open_api_fields():
         client.close()
 
     assert response.status_code == 200
-    assert response.json()["open_api_key"] == "secret-key"
+    assert response.json()["open_api_key"] == "********"
     assert response.json()["default_model_provider"] == "openai"
     assert response.json()["default_model_name"] == "gpt-4.1"
+
+
+def test_post_config_preserves_existing_open_api_key_when_mask_is_submitted():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/api/config",
+            json={
+                "providers": [],
+                "fetch_mode": "http",
+                "open_api_key": "********",
+                "default_model_provider": None,
+                "default_model_name": None,
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"key": "secret-key"})
 
 
 def test_get_config_accepts_legacy_default_model_name_field():
@@ -425,9 +455,48 @@ def test_post_open_api_tasks_rejects_partial_nonblank_model_selection_when_other
     assert "model_provider" in response.json()["detail"]
 
 
+def test_post_open_api_tasks_rejects_invalid_publish_type_before_task_creation():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "model": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+                "publish_type": "later",
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "publish_type" in response.json()["detail"]
+    assert asyncio.run(_get_task_count()) == 0
+
+
 def test_post_open_api_tasks_request_model_pair_overrides_default_model():
     asyncio.run(_reset_system_config_table())
     asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "providers.anthropic",
+            {
+                "name": "Anthropic",
+                "api_key": "anthropic-key",
+                "base_url": "https://api.anthropic.com",
+                "models": ["claude-3-5-sonnet"],
+            },
+        )
+    )
     asyncio.run(
         _seed_config_row(
             "open_api.default_model",
@@ -454,6 +523,35 @@ def test_post_open_api_tasks_request_model_pair_overrides_default_model():
         "anthropic",
         "claude-3-5-sonnet",
     )
+
+
+def test_post_open_api_tasks_rejects_explicit_model_provider_when_provider_not_configured():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "model": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+                "model_provider": "anthropic",
+                "model_name": "claude-3-5-sonnet",
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "provider" in response.json()["detail"].lower()
+    assert asyncio.run(_get_task_count()) == 0
 
 
 def test_post_open_api_tasks_requires_default_model_when_request_omits_model_fields():

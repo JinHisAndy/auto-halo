@@ -12,6 +12,7 @@ from app.schemas.task import TaskCreate
 from app.routers.tasks import create_task
 
 router = APIRouter(prefix="/open-api", tags=["open-api"])
+VALID_PUBLISH_TYPES = {"immediate", "scheduled"}
 
 
 def _normalize_optional_model_value(value: str | None) -> str | None:
@@ -44,6 +45,22 @@ async def _require_api_key(x_api_key: str | None):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 
+async def _is_provider_configured(provider_key: str) -> bool:
+    async with async_session() as db:
+        result = await db.execute(
+            select(SystemConfig).where(SystemConfig.key == f"providers.{provider_key.lower()}")
+        )
+        return result.scalar_one_or_none() is not None
+
+
+def _validate_publish_type(publish_type: str) -> None:
+    if publish_type not in VALID_PUBLISH_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="publish_type must be one of: immediate, scheduled",
+        )
+
+
 async def _resolve_model_selection(payload: OpenApiTaskCreateRequest) -> tuple[str, str]:
     provider = _normalize_optional_model_value(payload.model_provider)
     model_name = _normalize_optional_model_value(payload.model_name)
@@ -52,6 +69,11 @@ async def _resolve_model_selection(payload: OpenApiTaskCreateRequest) -> tuple[s
     has_model_name = model_name is not None
 
     if has_provider and has_model_name:
+        if not await _is_provider_configured(provider):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Provider {provider} is not configured",
+            )
         return provider, model_name
 
     if has_provider or has_model_name:
@@ -91,6 +113,11 @@ async def create_open_api_task(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> OpenApiTaskCreateResponse:
     await _require_api_key(x_api_key)
+
+    raw_publish_type = payload_data.get("publish_type", "immediate")
+    if isinstance(raw_publish_type, str):
+        raw_publish_type = raw_publish_type.strip()
+    _validate_publish_type(raw_publish_type)
 
     try:
         payload = OpenApiTaskCreateRequest.model_validate(payload_data)

@@ -17,6 +17,17 @@ from app.schemas.config import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/config", tags=["config"])
+MASKED_OPEN_API_KEY = "********"
+
+
+def _mask_open_api_key(value: str | None) -> str | None:
+    return MASKED_OPEN_API_KEY if value else None
+
+
+async def _get_config_row(db, key: str) -> SystemConfig | None:
+    result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
+    return result.scalar_one_or_none()
+
 
 @router.get("", response_model=ConfigResponse)
 async def get_config():
@@ -43,7 +54,8 @@ async def get_config():
         elif row.key == "fetch.mode":
             fetch_mode = value if isinstance(value, str) else value.get("value", "http")
         elif row.key == "open_api.key":
-            open_api_key = value if isinstance(value, str) else value.get("key")
+            configured_key = value if isinstance(value, str) else value.get("key")
+            open_api_key = _mask_open_api_key(configured_key)
         elif row.key == "open_api.default_model":
             default_model_provider = value.get("provider")
             default_model_name = value.get("model") or value.get("name")
@@ -113,9 +125,19 @@ async def save_config(payload: ConfigSaveRequest):
             db.add(SystemConfig(key=key, value=value))
 
         key = "open_api.key"
-        value = json.dumps({"key": payload.open_api_key})
-        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
-        row = result.scalar_one_or_none()
+        persisted_open_api_key = payload.open_api_key
+        if payload.open_api_key == MASKED_OPEN_API_KEY:
+            existing_open_api_key_row = await _get_config_row(db, key)
+            if existing_open_api_key_row is not None:
+                existing_open_api_key_value = json.loads(existing_open_api_key_row.value)
+                persisted_open_api_key = (
+                    existing_open_api_key_value
+                    if isinstance(existing_open_api_key_value, str)
+                    else existing_open_api_key_value.get("key")
+                )
+
+        value = json.dumps({"key": persisted_open_api_key})
+        row = await _get_config_row(db, key)
         if row:
             row.value = value
         else:
@@ -128,8 +150,7 @@ async def save_config(payload: ConfigSaveRequest):
                 "model": payload.default_model_name,
             }
         )
-        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
-        row = result.scalar_one_or_none()
+        row = await _get_config_row(db, key)
         if row:
             row.value = value
         else:

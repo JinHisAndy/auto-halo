@@ -1,10 +1,50 @@
 import sys
 from pathlib import Path
+import asyncio
+import json
+import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+sys.modules.setdefault(
+    "app.config",
+    types.SimpleNamespace(
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+    ),
+)
+
 from app.schemas.config import ConfigResponse, ConfigSaveRequest
 from app.schemas.open_api import OpenApiTaskCreateRequest, OpenApiTaskCreateResponse
+from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
+
+from app.db import async_session, init_db
+from app.main import app
+from app.models.system_config import SystemConfig
+
+
+async def _reset_system_config_table():
+    await init_db()
+    async with async_session() as db:
+        await db.execute(delete(SystemConfig))
+        await db.commit()
+
+
+async def _get_config_value(key: str):
+    async with async_session() as db:
+        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
+        row = result.scalar_one_or_none()
+        return None if row is None else row.value
+
+
+async def _seed_config_row(key: str, value):
+    async with async_session() as db:
+        db.add(SystemConfig(key=key, value=json.dumps(value)))
+        await db.commit()
+
+
+def _test_client():
+    return TestClient(app, raise_server_exceptions=True)
 
 
 def test_open_api_task_request_accepts_optional_model_fields():
@@ -51,10 +91,72 @@ def test_config_response_supports_open_api_settings():
     assert payload.default_model_name == "gpt-4.1"
 
 
-def test_config_router_persists_open_api_key_and_default_model_fields():
-    source = Path("app/routers/config.py").read_text(encoding="utf-8")
-    assert 'open_api.key' in source
-    assert 'open_api.default_model' in source
+def test_post_config_persists_open_api_key():
+    asyncio.run(_reset_system_config_table())
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/api/config",
+            json={
+                "providers": [],
+                "fetch_mode": "http",
+                "open_api_key": "secret-key",
+                "default_model_provider": None,
+                "default_model_name": None,
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"value": "secret-key"})
+
+
+def test_post_config_persists_open_api_default_model():
+    asyncio.run(_reset_system_config_table())
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/api/config",
+            json={
+                "providers": [],
+                "fetch_mode": "http",
+                "open_api_key": None,
+                "default_model_provider": "openai",
+                "default_model_name": "gpt-4.1",
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert asyncio.run(_get_config_value("open_api.default_model")) == json.dumps(
+        {"provider": "openai", "name": "gpt-4.1"}
+    )
+
+
+def test_get_config_returns_mapped_open_api_fields():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"value": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "name": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.get("/api/config")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    assert response.json()["open_api_key"] == "secret-key"
+    assert response.json()["default_model_provider"] == "openai"
+    assert response.json()["default_model_name"] == "gpt-4.1"
 
 
 def test_open_api_task_create_response_schema_fields():

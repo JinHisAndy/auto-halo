@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.db import init_db
-from app.routers import tasks, config, pages, ws
+from app.routers import tasks, config, pages, ws, open_api
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -25,6 +25,7 @@ app = FastAPI(title="Auto-Halo", version="0.1.0", lifespan=lifespan)
 
 app.include_router(tasks.router)
 app.include_router(config.router)
+app.include_router(open_api.router)
 app.include_router(pages.router)
 app.add_websocket_route("/ws/tasks", ws.websocket_endpoint)
 

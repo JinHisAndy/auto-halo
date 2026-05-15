@@ -192,3 +192,9 @@ def test_open_api_task_create_response_schema_fields():
     assert payload.status == "fetching"
     assert payload.trigger_source == "api"
     assert payload.message == "任务已创建"
+
+
+def test_open_api_router_contains_api_key_header_validation_and_task_endpoint():
+    source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
+    assert 'X-API-Key' in source
+    assert '@router.post("/tasks")' in source

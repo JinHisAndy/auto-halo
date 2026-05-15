@@ -465,6 +465,32 @@ def test_post_open_api_tasks_requires_default_model_when_request_omits_model_fie
     assert "default model" in response.json()["detail"].lower()
 
 
+def test_post_open_api_tasks_rejects_whitespace_only_stored_default_model():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "   ", "model": " \t "},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "default model" in response.json()["detail"].lower()
+
+
 def test_open_api_router_contains_api_key_header_validation_and_task_endpoint():
     source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
     assert 'X-API-Key' in source

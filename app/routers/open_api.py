@@ -73,6 +73,9 @@ async def _resolve_model_selection(payload: OpenApiTaskCreateRequest) -> tuple[s
     if isinstance(value, dict):
         model_name = value.get("model") or value.get("name")
 
+    provider = _normalize_optional_model_value(provider)
+    model_name = _normalize_optional_model_value(model_name)
+
     if not provider or not model_name:
         raise HTTPException(status_code=400, detail="Open API default model is not configured")
 

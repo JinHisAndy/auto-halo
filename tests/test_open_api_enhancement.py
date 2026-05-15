@@ -539,3 +539,10 @@ def test_open_api_router_uses_default_model_when_request_model_missing_and_sets_
     source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
     assert 'open_api.default_model' in source
     assert 'trigger_source="api"' in source or "trigger_source='api'" in source
+
+
+def test_settings_template_contains_open_api_key_and_default_model_section():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "Open API" in source
+    assert "API Key" in source
+    assert "默认模型" in source or "default model" in source.lower()

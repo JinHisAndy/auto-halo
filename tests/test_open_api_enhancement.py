@@ -567,3 +567,26 @@ def test_open_api_docs_page_and_route_exist():
     assert template.exists()
     source = Path("app/routers/pages.py").read_text(encoding="utf-8")
     assert '/open-api/docs' in source
+
+
+def test_open_api_docs_template_includes_required_usage_examples_and_json_samples():
+    source = Path("app/templates/open_api_docs.html").read_text(encoding="utf-8")
+
+    required_markers = [
+        "API Key 用法",
+        "X-API-Key",
+        "POST /open-api/tasks",
+        "curl 示例",
+        "curl -X POST",
+        "Python requests 示例",
+        "requests.post(",
+        "JavaScript fetch 示例",
+        'fetch("/open-api/tasks", {',
+        '"task_id": "task-123"',
+        '"status": "fetching"',
+        '"trigger_source": "api"',
+        '"detail": "Missing X-API-Key header"',
+    ]
+
+    for marker in required_markers:
+        assert marker in source, f"Missing docs marker: {marker}"

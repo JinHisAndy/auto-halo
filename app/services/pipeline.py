@@ -15,7 +15,12 @@ logger = logging.getLogger(__name__)
 
 class StageExecutionError(Exception):
     def __init__(self, stage: str, original: Exception):
-        super().__init__(str(original))
+        inner = str(original)
+        if "ReadTimeout" in type(original).__name__:
+            inner = f"{stage}阶段请求超时，请检查模型服务是否可用"
+        elif "ConnectError" in type(original).__name__ or "ConnectTimeout" in type(original).__name__:
+            inner = f"{stage}阶段连接失败，请检查网络或服务地址"
+        super().__init__(inner)
         self.stage = stage
         self.original = original
 
@@ -600,7 +605,7 @@ async def run_pipeline(
 
     except Exception as e:
         current_stage = e.stage if isinstance(e, StageExecutionError) else current_stage
-        error = e.original if isinstance(e, StageExecutionError) else e
+        error = e if isinstance(e, StageExecutionError) else e
         logger.exception(f"Pipeline failed for task {task_id}")
         await _update_task(
             task_id,

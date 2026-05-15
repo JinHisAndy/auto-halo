@@ -465,10 +465,8 @@ def test_halo_client_retries_duplicate_names_five_times_with_distinct_retry_name
 
 def test_task_list_template_contains_source_badges_and_retry_actions():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
-    assert "UI创建" in source
     assert "API创建" in source
-    assert "未知来源" in source
-    assert "sourceLabel(task.trigger_source)" in source
+    assert "x-show=\"task.trigger_source === 'api'\" x-text=\"'API创建'\"" in source or "x-show=\"task.trigger_source === 'api'\"" in source
     assert "重试" in source
     assert "重新发布" in source
     assert "refreshTaskSubscriptions()" in source

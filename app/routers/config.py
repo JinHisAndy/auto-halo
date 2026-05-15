@@ -130,11 +130,12 @@ async def save_config(payload: ConfigSaveRequest):
             existing_open_api_key_row = await _get_config_row(db, key)
             if existing_open_api_key_row is not None:
                 existing_open_api_key_value = json.loads(existing_open_api_key_row.value)
-                persisted_open_api_key = (
-                    existing_open_api_key_value
-                    if isinstance(existing_open_api_key_value, str)
-                    else existing_open_api_key_value.get("key")
-                )
+                if existing_open_api_key_value is not None:
+                    persisted_open_api_key = (
+                        existing_open_api_key_value
+                        if isinstance(existing_open_api_key_value, str)
+                        else existing_open_api_key_value.get("key")
+                    )
 
         value = json.dumps({"key": persisted_open_api_key})
         row = await _get_config_row(db, key)

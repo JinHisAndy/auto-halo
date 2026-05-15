@@ -64,9 +64,9 @@ def test_html_rewrite_prompt_preserves_structure_and_media_placeholders():
         content_format="html",
     )
 
-    assert "preserve overall structure" in prompt.lower()
-    assert "preserve these tags and their intent" in prompt.lower()
-    assert "rewrite textual nodes only" in prompt.lower()
+    assert "保留 HTML 文档的整体结构" in prompt or "HTML 文档的整体结构" in prompt
+    assert "img" in prompt.lower() and "video" in prompt.lower() and "pre" in prompt.lower()
+    assert "不得直接复制粘贴" in prompt or "直接复制粘贴" in prompt
     assert "<img src=\"hero.jpg\" />" in prompt
 
 

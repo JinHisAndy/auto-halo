@@ -133,18 +133,17 @@ def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
     prompt = build_rewrite_prompt("<article><p>Hello</p><img src='a.jpg' /></article>")
     prompt_lower = prompt.lower()
     expected_preserve_tags_line = (
-        "- preserve these tags and their intent: img, video, audio, source, a, pre, code, "
-        "table, ul, ol, blockquote"
+        "- img、video、audio、source、a、pre、code、table、ul、ol、blockquote"
     )
 
-    assert "experienced technical blogger" in prompt_lower or "技术读者" in prompt
-    assert "更丰富、更完整" in prompt or "more complete" in prompt_lower
-    assert "不得编造事实" in prompt or "accurate" in prompt_lower
-    assert "preserve these tags and their intent" in prompt_lower
+    assert "常年写技术博客" in prompt or "技术博主" in prompt
+    assert "不要改变原文的核心信息" in prompt or "补充必要的技术背景" in prompt
+    assert "不得凭空编造" in prompt or "不能凭空编造" in prompt
+    assert "img" in prompt_lower and "video" in prompt_lower and "pre" in prompt_lower and "code" in prompt_lower
     assert expected_preserve_tags_line in prompt
-    assert "do not remove media tags" in prompt_lower or "不要删除媒体标签" in prompt
-    assert "do not rewrite code blocks into prose" in prompt_lower or "不要改写成普通文字" in prompt
-    assert "严格遵循以下格式" in prompt or "strictly follow" in prompt_lower
+    assert "不要删除任何媒体标签" in prompt or "不要删除媒体标签" in prompt
+    assert "绝对不要改写成普通文字" in prompt or "改写成普通文字" in prompt
+    assert "严格遵守" in prompt or "严格遵循" in prompt
     assert "TITLE:" in prompt
     assert "BODY:" in prompt
 
@@ -257,3 +256,29 @@ def test_task_list_template_contains_generated_tag_preview():
     assert 'x-show="task.generated_tags && task.generated_tags.length"' in source
     assert 'x-for="tag in task.generated_tags"' in source
     assert 'x-text="tag.name"' in source
+
+
+def test_task_list_template_renders_tags_with_color_classes():
+    source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
+    assert "tag.color === 'blue'" in source
+    assert "tag.color === 'indigo'" in source
+    assert "tag.color === 'teal'" in source
+    assert "tag.color === 'emerald'" in source
+    assert "tag.color === 'amber'" in source
+    assert "tag.color === 'rose'" in source
+    assert "bg-blue-100 text-blue-700" in source
+    assert "bg-indigo-100 text-indigo-700" in source
+
+
+def test_minio_save_original_returns_url_mapping():
+    source = Path("app/services/storage/minio_client.py").read_text(encoding="utf-8")
+    assert "url_mapping" in source
+    assert "tuple[str, dict[str, str]]" in source
+    assert "_build_minio_url" in source
+
+
+def test_pipeline_replaces_original_urls_with_minio_urls_in_rewritten_content():
+    source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
+    assert "url_mapping" in source
+    assert "rewritten_body = rewritten_body.replace(original_url, minio_url)" in source
+    assert "minio_path, url_mapping = await minio_storage.save_original" in source

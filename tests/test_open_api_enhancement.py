@@ -667,6 +667,34 @@ def test_open_api_docs_page_and_route_exist():
     assert '/open-api/docs' in source
 
 
+def test_post_config_mask_preserve_handles_none_existing_value_gracefully():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", None))
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/api/config",
+            json={
+                "providers": [],
+                "fetch_mode": "http",
+                "open_api_key": "********",
+                "default_model_provider": None,
+                "default_model_name": None,
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+
+
+def test_settings_template_contains_generate_key_button():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "生成 Key" in source
+    assert "generateOpenApiKey" in source
+
+
 def test_open_api_docs_template_includes_required_usage_examples_and_json_samples():
     source = Path("app/templates/open_api_docs.html").read_text(encoding="utf-8")
 

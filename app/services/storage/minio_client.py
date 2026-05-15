@@ -55,12 +55,13 @@ class MinioStorage:
 
     async def save_original(
         self, db_session, article_title: str, html_raw: str, parsed_article
-    ) -> str:
+    ) -> tuple[str, dict[str, str]]:
         config = await self._load_config(db_session)
         client = self._get_client(config)
         bucket = config["bucket"]
 
         folder = f"{article_title}/"
+        url_mapping: dict[str, str] = {}
 
         client.put_object(
             bucket,
@@ -70,27 +71,43 @@ class MinioStorage:
             content_type="text/html",
         )
 
+        secure = config.get("secure", False)
+        raw_endpoint = config["endpoint"].strip()
+        if raw_endpoint.startswith("https://"):
+            secure = True
+        elif raw_endpoint.startswith("http://"):
+            secure = False
+        scheme = "https" if secure else "http"
+        endpoint = self._clean_endpoint(config["endpoint"])
+
+        def _build_minio_url(object_path: str) -> str:
+            return f"{scheme}://{endpoint}/{bucket}/{object_path}"
+
         for item in parsed_article.media_items:
             if item.local_path:
                 local = Path(item.local_path)
                 if local.exists():
+                    object_path = f"{folder}media/{item.filename}"
                     client.fput_object(
                         bucket,
-                        f"{folder}media/{item.filename}",
+                        object_path,
                         str(local),
                     )
+                    url_mapping[item.url] = _build_minio_url(object_path)
 
         for item in parsed_article.attachment_items:
             if item.local_path:
                 local = Path(item.local_path)
                 if local.exists():
+                    object_path = f"{folder}attachments/{item.filename}"
                     client.fput_object(
                         bucket,
-                        f"{folder}attachments/{item.filename}",
+                        object_path,
                         str(local),
                     )
+                    url_mapping[item.url] = _build_minio_url(object_path)
 
-        return folder
+        return folder, url_mapping
 
     async def save_rewritten(self, db_session, article_title: str, markdown_content: str) -> str:
         config = await self._load_config(db_session)

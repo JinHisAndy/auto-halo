@@ -1,17 +1,20 @@
 HTML_REWRITE_PROMPT = """
-你是一位 experienced technical blogger，面向技术读者、开发者和工程师写作。请重写下面的 HTML 文章内容。
-要求：
-- preserve overall structure of the HTML document
-- rewrite textual nodes only when appropriate, while keeping technical meaning accurate
-- 内容可以更丰富、更完整（more complete），可以补充必要的技术上下文、解释和工程细节，但不得编造事实，不得改变原文核心信息、结论和观点
-- 保持技术表达准确，适合技术读者阅读
-- preserve these tags and their intent: img, video, audio, source, a, pre, code, table, ul, ol, blockquote
-- do not remove media tags，不要删除媒体标签
-- do not rewrite code blocks into prose，代码块和 pre/code 中的代码内容应保留为代码块，不要改写成普通文字
-- 保留链接、列表、表格、引用、媒体及代码相关结构
-- 使用自然、清晰、专业的技术博客口吻表达
-- 不得直接复制粘贴原文句子
-- 输出必须严格遵循以下格式：
+作为一个常年写技术博客的人，请帮我重写下面这篇 HTML 格式的技术文章，面向开发者和工程师读者。
+
+基本要求：
+- 保留 HTML 文档的整体结构，不要大改 DOM 层级的布局
+- 只对文字节点做适当润色重写，不要改变原文的核心信息、事实、结论和观点
+- 内容可以更充实，适当补充必要的技术背景、工程细节和个人经验视角，但不能凭空编造
+- 技术表达的准确性放在第一位，语言风格要像真实的技术博主——自信但不浮夸，有干货有态度
+- 不要直接复制粘贴原文的句子，必须用自己的话重新表达
+
+必须保留的标签和结构：
+- img、video、audio、source、a、pre、code、table、ul、ol、blockquote
+- 不要删除任何媒体标签（图片、视频、音频等），这是硬性要求
+- pre 和 code 中的代码块必须原样保留为代码块，绝对不要改写成普通文字
+- 保留超链接、列表、表格、引用块等结构
+
+输出格式（必须严格遵守）：
   TITLE: <重写后的标题>
   BODY:
   <重写后的正文>
@@ -22,13 +25,16 @@ HTML_REWRITE_PROMPT = """
 """
 
 TEXT_REWRITE_PROMPT = """
-你是一位资深博客作者。请将以下文章内容用你自己的话重写一遍。
+作为一个常年写技术博客的人，请帮我把下面的文章用你自己的话重新写一遍。
+
 要求：
-- 保持原文的核心信息和观点不变
-- 用博客的轻松自然口吻表达
-- 不得直接复制粘贴原文的句子
-- 可以调整文章结构和段落顺序
-- 输出必须严格遵循以下格式：
+- 保持原文的核心信息、事实和观点不变
+- 用真实技术博主的口吻来写——自信、有干货、不啰嗦，像在跟同行交流
+- 可以适当调整文章结构和段落顺序，让阅读节奏更舒服
+- 可以补充必要的技术上下文，但不能凭空编造内容
+- 绝对不要直接复制粘贴原文的句子
+
+输出格式（必须严格遵守）：
   TITLE: <重写后的标题>
   BODY:
   <重写后的正文>

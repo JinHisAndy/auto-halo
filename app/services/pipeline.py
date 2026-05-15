@@ -140,6 +140,7 @@ async def _rewrite_from_source(
     source_title: str,
     rewrite_source: str,
     source_validation_html: str | None = None,
+    url_mapping: dict[str, str] | None = None,
 ):
     from app.services.rewriter.factory import RewriterFactory
     from app.services.storage.minio_client import minio_storage
@@ -164,6 +165,11 @@ async def _rewrite_from_source(
         )
         rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations)
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
+
+        if url_mapping:
+            for original_url, minio_url in url_mapping.items():
+                rewritten_body = rewritten_body.replace(original_url, minio_url)
+
         ok, message = validate_rewritten_html(source_validation_html or rewrite_source, rewritten_body)
         if not ok:
             raise ValueError(message)
@@ -252,7 +258,7 @@ async def _retry_from_parsing(
         await _broadcast_update(task_id, "parsing", 40, "正在上传原始文件到MinIO...")
 
         async with async_session() as db:
-            minio_path = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
+            minio_path, url_mapping = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
 
         _cleanup_local_files(parsed)
 
@@ -268,6 +274,7 @@ async def _retry_from_parsing(
             source_title=parsed.title,
             rewrite_source=parsed.rich_html or parsed.clean_text,
             source_validation_html=parsed.rich_html,
+            url_mapping=url_mapping if url_mapping else None,
         )
     except Exception as e:
         if isinstance(e, StageExecutionError):
@@ -563,7 +570,7 @@ async def run_pipeline(
         await _broadcast_update(task_id, "parsing", 40, "正在上传原始文件到MinIO...")
 
         async with async_session() as db:
-            minio_path = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
+            minio_path, url_mapping = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
 
         _cleanup_local_files(parsed)
 
@@ -588,6 +595,7 @@ async def run_pipeline(
             source_title=parsed.title,
             rewrite_source=rewrite_source,
             source_validation_html=parsed.rich_html,
+            url_mapping=url_mapping if url_mapping else None,
         )
 
     except Exception as e:

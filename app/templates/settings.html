@@ -85,8 +85,11 @@
                 <h2 class="text-lg font-semibold">Open API</h2>
                 <a href="/open-api/docs" class="text-sm text-indigo-600 hover:text-indigo-800">查看 /open-api/docs</a>
             </div>
-            <div class="space-y-3">
-                <input type="password" x-model="openApiKey" class="w-full border rounded px-3 py-2 text-sm" placeholder="API Key" @focus="openApiKey=''" x-bind:placeholder="openApiKey ? '••••••••' : 'API Key'">
+<div class="space-y-3">
+                <div class="flex gap-2">
+                    <input type="password" x-model="openApiKey" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="API Key" @focus="openApiKey=''" x-bind:placeholder="openApiKey ? '••••••••' : 'API Key'">
+                    <button @click="generateOpenApiKey" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">生成 Key</button>
+                </div>
                 <div class="grid gap-3 md:grid-cols-2">
                     <div>
                         <label class="block text-sm text-gray-600 mb-1">默认提供商</label>
@@ -306,6 +309,15 @@ async saveSilent() {
             this.toast = msg;
             this.toastType = type;
             setTimeout(() => { this.toast = ''; }, 3000);
+        },
+
+        generateOpenApiKey() {
+            const chars = '0123456789abcdef';
+            let key = '';
+            for (let i = 0; i < 32; i++) {
+                key += chars[Math.floor(Math.random() * 16)];
+            }
+            this.openApiKey = key;
         },
     }
 }

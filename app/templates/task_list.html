@@ -27,7 +27,15 @@
 
                 <div class="flex flex-wrap gap-2 mt-2 mb-3" x-show="task.generated_tags && task.generated_tags.length">
                     <template x-for="tag in task.generated_tags" :key="tag.name">
-                        <span class="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-700" x-text="tag.name"></span>
+                        <span class="px-2 py-0.5 rounded-full text-xs"
+                            :class="{
+                                'bg-blue-100 text-blue-700': tag.color === 'blue',
+                                'bg-indigo-100 text-indigo-700': tag.color === 'indigo',
+                                'bg-teal-100 text-teal-700': tag.color === 'teal',
+                                'bg-emerald-100 text-emerald-700': tag.color === 'emerald',
+                                'bg-amber-100 text-amber-700': tag.color === 'amber',
+                                'bg-rose-100 text-rose-700': tag.color === 'rose',
+                            }" x-text="tag.name"></span>
                     </template>
                 </div>
 

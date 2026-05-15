@@ -210,6 +210,7 @@ def test_post_open_api_tasks_missing_api_key_returns_401():
         client.close()
 
     assert response.status_code == 401
+    assert response.json()["detail"] == "Missing X-API-Key header"
 
 
 def test_post_open_api_tasks_without_configured_key_returns_503():
@@ -266,11 +267,11 @@ def test_post_open_api_tasks_with_valid_api_key_succeeds():
         client.close()
 
     assert response.status_code in {200, 201}
-    assert response.json()["trigger_source"] == "open_api"
+    assert response.json()["trigger_source"] == "api"
     assert response.json()["status"] == "accepted"
 
 
 def test_open_api_router_contains_api_key_header_validation_and_task_endpoint():
     source = Path("app/routers/open_api.py").read_text(encoding="utf-8")
     assert 'X-API-Key' in source
-    assert '@router.post("/tasks")' in source
+    assert '@router.post("/tasks", response_model=OpenApiTaskCreateResponse)' in source

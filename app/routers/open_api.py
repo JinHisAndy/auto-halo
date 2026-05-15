@@ -13,7 +13,7 @@ router = APIRouter(prefix="/open-api", tags=["open-api"])
 
 async def _require_api_key(x_api_key: str | None):
     if not x_api_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
+        raise HTTPException(status_code=401, detail="Missing X-API-Key header")
 
     async with async_session() as db:
         result = await db.execute(
@@ -33,7 +33,7 @@ async def _require_api_key(x_api_key: str | None):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 
-@router.post("/tasks")
+@router.post("/tasks", response_model=OpenApiTaskCreateResponse)
 async def create_open_api_task(
     payload: OpenApiTaskCreateRequest,
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
@@ -43,6 +43,6 @@ async def create_open_api_task(
     return OpenApiTaskCreateResponse(
         task_id=str(uuid4()),
         status="accepted",
-        trigger_source="open_api",
+        trigger_source="api",
         message=f"Task request accepted for {len(payload.urls)} url(s)",
     )

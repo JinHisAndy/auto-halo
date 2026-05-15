@@ -3,6 +3,7 @@ from pathlib import Path
 import asyncio
 import json
 import types
+import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -65,6 +66,16 @@ def test_open_api_task_request_accepts_optional_model_fields():
     )
     assert payload.model_provider is None
     assert payload.model_name is None
+
+
+def test_open_api_request_requires_scheduled_at_for_scheduled_publish():
+    with pytest.raises(Exception):
+        OpenApiTaskCreateRequest.model_validate(
+            {
+                "urls": ["https://example.com"],
+                "publish_type": "scheduled",
+            }
+        )
 
 
 def test_config_save_request_supports_open_api_settings():
@@ -463,6 +474,33 @@ def test_post_open_api_tasks_requires_default_model_when_request_omits_model_fie
 
     assert response.status_code == 400
     assert "default model" in response.json()["detail"].lower()
+
+
+def test_post_open_api_tasks_requires_scheduled_at_for_scheduled_publish():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(
+        _seed_config_row(
+            "open_api.default_model",
+            {"provider": "openai", "model": "gpt-4.1"},
+        )
+    )
+
+    client = _test_client()
+    try:
+        response = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "secret-key"},
+            json={
+                "urls": ["https://example.com/post"],
+                "publish_type": "scheduled",
+            },
+        )
+    finally:
+        client.close()
+
+    assert response.status_code == 400
+    assert "scheduled_at" in response.json()["detail"]
 
 
 def test_post_open_api_tasks_rejects_whitespace_only_stored_default_model():

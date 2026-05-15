@@ -1,6 +1,8 @@
 import json
+from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Header, HTTPException
+from pydantic import ValidationError
 from sqlalchemy import select
 
 from app.db import async_session
@@ -84,11 +86,31 @@ async def _resolve_model_selection(payload: OpenApiTaskCreateRequest) -> tuple[s
 
 @router.post("/tasks", response_model=OpenApiTaskCreateResponse)
 async def create_open_api_task(
-    payload: OpenApiTaskCreateRequest,
     background_tasks: BackgroundTasks,
+    payload_data: dict[str, Any] = Body(...),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
 ) -> OpenApiTaskCreateResponse:
     await _require_api_key(x_api_key)
+
+    try:
+        payload = OpenApiTaskCreateRequest.model_validate(payload_data)
+    except ValidationError as exc:
+        if (
+            payload_data.get("publish_type") == "scheduled"
+            and payload_data.get("scheduled_at") is None
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="scheduled_at is required when publish_type is scheduled",
+            ) from exc
+        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+
+    if payload.publish_type == "scheduled" and payload.scheduled_at is None:
+        raise HTTPException(
+            status_code=400,
+            detail="scheduled_at is required when publish_type is scheduled",
+        )
+
     model_provider, model_name = await _resolve_model_selection(payload)
 
     task = await create_task(

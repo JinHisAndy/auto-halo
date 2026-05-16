@@ -1,0 +1,132 @@
+import asyncio
+import re
+import sys
+import types
+from pathlib import Path
+
+import httpx
+import pytest
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+sys.modules.setdefault(
+    "app.config",
+    types.SimpleNamespace(
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+    ),
+)
+
+from app.main import app
+from app.services.publisher.halo_client import HaloClient
+from app.services.publisher.payloads import build_halo_payload
+
+
+def _test_client():
+    return TestClient(app, raise_server_exceptions=True)
+
+
+def _nav_link_class(html: str, href: str) -> str:
+    matches = re.findall(rf'<a href="{re.escape(href)}" class="([^"]+)"', html)
+    assert matches, f"expected nav link for {href}"
+    return matches[-1]
+
+
+@pytest.mark.parametrize(
+    ("path", "active_href"),
+    [
+        ("/", "/"),
+        ("/tasks", "/tasks"),
+        ("/settings", "/settings"),
+        ("/open-api/docs", "/open-api/docs"),
+    ],
+)
+def test_nav_marks_current_page_active(path, active_href):
+    client = _test_client()
+    try:
+        response = client.get(path)
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    active_classes = _nav_link_class(response.text, active_href)
+    assert "text-indigo-600" in active_classes
+    assert "border-indigo-600" in active_classes
+
+
+def test_build_halo_payload_keeps_tag_slugs_in_post_spec():
+    payload = build_halo_payload(
+        "Tagged Title",
+        "<p>body</p>",
+        tags=["linux", "docker"],
+    )
+
+    assert payload["post"]["spec"]["tags"] == ["linux", "docker"]
+
+
+def test_halo_client_immediate_publish_creates_post_then_publishes_with_same_name(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code: int, payload=None, text: str = ""):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        @property
+        def is_success(self):
+            return 200 <= self.status_code < 300
+
+        def json(self):
+            return self._payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, headers=None, params=None):
+            calls.append(("GET", url, params, None))
+            return FakeResponse(200, {"items": []})
+
+        async def post(self, url, headers=None, json=None):
+            calls.append(("POST", url, None, json))
+            if url.endswith("/tags"):
+                return FakeResponse(201, {"metadata": {"name": json["tag"]["metadata"]["name"]}})
+            if url.endswith("/posts"):
+                return FakeResponse(201, {"metadata": {"name": json["post"]["metadata"]["name"]}})
+            if url.endswith("/publish"):
+                return FakeResponse(200, {"metadata": {"name": "tagged-title"}})
+            raise AssertionError(f"unexpected POST {url}")
+
+    async def fake_load_config(self, db_session):
+        return {"site_url": "https://halo.example", "api_token": "token"}
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(HaloClient, "_load_config", fake_load_config)
+
+    post_id = asyncio.run(
+        HaloClient().publish(
+            None,
+            "Tagged Title",
+            "<p>body</p>",
+            tags=[{"name": "Linux", "color": "blue"}],
+        )
+    )
+
+    assert post_id == "tagged-title"
+    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/posts")] == [
+        "https://halo.example/apis/api.console.halo.run/v1alpha1/posts"
+    ]
+    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/publish")] == [
+        "https://halo.example/apis/api.console.halo.run/v1alpha1/posts/tagged-title/publish"
+    ]
+
+    create_payload = next(call[3] for call in calls if call[0] == "POST" and call[1].endswith("/posts"))
+    assert create_payload["post"]["spec"]["publish"] is False
+    assert create_payload["post"]["spec"]["tags"] == ["linux"]

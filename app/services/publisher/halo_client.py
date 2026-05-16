@@ -20,6 +20,7 @@ class HaloClient:
         publish_time=None,
         slug_suffix: str | None = None,
         tags: list[dict] | None = None,
+        publish: bool | None = None,
     ) -> dict:
         return build_halo_payload(
             title,
@@ -27,6 +28,7 @@ class HaloClient:
             publish_time,
             slug_suffix=slug_suffix,
             tags=tags,
+            publish=publish,
         )
 
     async def _load_config(self, db_session) -> dict | None:
@@ -137,6 +139,7 @@ class HaloClient:
                     publish_time,
                     slug_suffix=slug_suffix,
                     tags=tag_slugs,
+                    publish=False if publish_time is None else None,
                 )
                 slug = payload["post"]["metadata"]["name"]
 
@@ -150,7 +153,20 @@ class HaloClient:
                 )
                 if resp.is_success:
                     data = resp.json()
-                    return data.get("metadata", {}).get("name", slug)
+                    post_name = data.get("metadata", {}).get("name", slug)
+                    if publish_time is None:
+                        publish_resp = await client.post(
+                            f"{site_url}/apis/api.console.halo.run/v1alpha1/posts/{post_name}/publish",
+                            headers={
+                                "Authorization": f"Bearer {api_token}",
+                                "Content-Type": "application/json",
+                            },
+                        )
+                        if not publish_resp.is_success:
+                            raise Exception(
+                                f"Halo 发布失败 (HTTP {publish_resp.status_code}): {publish_resp.text}"
+                            )
+                    return post_name
                 if "名称重复" in resp.text or "重复的名称" in resp.text:
                     if attempt == 5:
                         break

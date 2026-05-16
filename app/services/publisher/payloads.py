@@ -18,9 +18,10 @@ def build_halo_payload(
     publish_time=None,
     slug_suffix: str | None = None,
     tags: list | None = None,
+    publish: bool | None = None,
 ) -> dict:
     slug = _build_slug(title, slug_suffix=slug_suffix)
-    publish = publish_time is None
+    should_publish = publish_time is None if publish is None else publish
 
     payload = {
         "post": {
@@ -30,7 +31,7 @@ def build_halo_payload(
                 "template": "",
                 "cover": "",
                 "deleted": False,
-                "publish": publish,
+                "publish": should_publish,
                 "pinned": False,
                 "allowComment": True,
                 "visible": "PUBLIC",

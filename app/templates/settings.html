@@ -309,7 +309,6 @@ function settingsPage() {
                 const resp = await fetch(url, { method: 'POST' });
                 const data = await resp.json();
                 if (resp.ok) {
-                    await this.fetchProviderModels(provider);
                     this.showToast(data.message, 'success');
                 } else {
                     this.showToast(data.detail || data.message || '测试失败', 'error');
@@ -329,6 +328,7 @@ function settingsPage() {
                 const resp = await fetch(`/api/config/test/provider.${provider.name.toLowerCase()}`, { method: 'POST' });
                 const data = await resp.json();
                 if (resp.ok) {
+                    await this.fetchProviderModels(provider);
                     this.showToast(data.message, 'success');
                 } else {
                     this.showToast(data.detail || data.message || '测试失败', 'error');

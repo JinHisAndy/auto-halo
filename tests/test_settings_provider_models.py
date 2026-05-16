@@ -102,8 +102,16 @@ def test_post_config_rejects_default_model_outside_loaded_provider_models():
 def test_settings_template_auto_fetches_models_after_provider_connection_test():
     source = Path("app/templates/settings.html").read_text(encoding="utf-8")
 
+    provider_function = source.split("async testProviderConnection(provider) {", 1)[1].split(
+        "async saveSilent() {", 1
+    )[0]
+    generic_connection_function = source.split("async testConnection(service) {", 1)[1].split(
+        "async testProviderConnection(provider) {", 1
+    )[0]
+
     assert '@click="fetchProviderModels(provider)"' not in source
-    assert "await this.fetchProviderModels(provider);" in source
+    assert "await this.fetchProviderModels(provider);" in provider_function
+    assert "await this.fetchProviderModels(provider);" not in generic_connection_function
     assert "模型列表获取成功" in source
 
 

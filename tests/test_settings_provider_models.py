@@ -105,13 +105,23 @@ def test_settings_template_auto_fetches_models_after_provider_connection_test():
     provider_function = source.split("async testProviderConnection(provider) {", 1)[1].split(
         "async saveSilent() {", 1
     )[0]
+    fetch_models_function = source.split("async fetchProviderModels(provider", 1)[1].split(
+        "async testConnection(service) {", 1
+    )[0]
     generic_connection_function = source.split("async testConnection(service) {", 1)[1].split(
         "async testProviderConnection(provider) {", 1
     )[0]
 
     assert '@click="fetchProviderModels(provider)"' not in source
-    assert "await this.fetchProviderModels(provider);" in provider_function
+    assert "await this.fetchProviderModels(provider, { showSuccessToast: false });" in provider_function
+    assert "const modelsFetched =" in provider_function
+    assert "if (modelsFetched) {" in provider_function
     assert "await this.fetchProviderModels(provider);" not in generic_connection_function
+    assert "this.showToast(data.message, 'success');" in provider_function
+    assert "async fetchProviderModels(provider, { showSuccessToast = true } = {}) {" in source
+    assert "if (showSuccessToast) this.showToast('模型列表获取成功', 'success');" in fetch_models_function
+    assert "return true;" in fetch_models_function
+    assert "return false;" in fetch_models_function
     assert "模型列表获取成功" in source
 
 

@@ -275,8 +275,8 @@ function settingsPage() {
             this.saveSilent();
         },
 
-        async fetchProviderModels(provider) {
-            if (!provider.name) return;
+        async fetchProviderModels(provider, { showSuccessToast = true } = {}) {
+            if (!provider.name) return false;
             await this.saveSilent();
             try {
                 const resp = await fetch(`/api/config/models/${provider.name.toLowerCase()}`, { method: 'POST' });
@@ -286,12 +286,15 @@ function settingsPage() {
                     if (provider.models.length > 0) provider.selectedModel = provider.models[0].id;
                     if (provider.name.toLowerCase() === this.defaultModelProvider) this.syncDefaultModelSelection();
                     await this.saveSilent();
-                    this.showToast('模型列表获取成功', 'success');
+                    if (showSuccessToast) this.showToast('模型列表获取成功', 'success');
+                    return true;
                 } else {
                     this.showToast(data.detail || '获取模型列表失败', 'error');
+                    return false;
                 }
             } catch (e) {
                 this.showToast('获取模型列表失败: ' + e.message, 'error');
+                return false;
             }
         },
 
@@ -328,8 +331,10 @@ function settingsPage() {
                 const resp = await fetch(`/api/config/test/provider.${provider.name.toLowerCase()}`, { method: 'POST' });
                 const data = await resp.json();
                 if (resp.ok) {
-                    await this.fetchProviderModels(provider);
-                    this.showToast(data.message, 'success');
+                    const modelsFetched = await this.fetchProviderModels(provider, { showSuccessToast: false });
+                    if (modelsFetched) {
+                        this.showToast(data.message, 'success');
+                    }
                 } else {
                     this.showToast(data.detail || data.message || '测试失败', 'error');
                 }

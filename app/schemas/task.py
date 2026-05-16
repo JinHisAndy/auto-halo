@@ -22,6 +22,15 @@ class TaskCreate(BaseModel):
         return normalized
 
 
+class TaskBatchCreateRequest(BaseModel):
+    tasks: list[TaskCreate]
+
+
+class TaskBatchCreateResponse(BaseModel):
+    task_ids: list[str]
+    count: int
+
+
 class TaskResponse(BaseModel):
     id: str
     title: Optional[str]

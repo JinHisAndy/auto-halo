@@ -8,7 +8,13 @@ from sqlalchemy import select
 
 from app.db import async_session
 from app.models.task import Task, TaskStatus, PublishType
-from app.schemas.task import TaskCreate, TaskResponse, TaskListResponse
+from app.schemas.task import (
+    TaskBatchCreateRequest,
+    TaskBatchCreateResponse,
+    TaskCreate,
+    TaskListResponse,
+    TaskResponse,
+)
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
@@ -67,6 +73,56 @@ async def create_task(payload: TaskCreate, background_tasks: BackgroundTasks):
     )
 
     return task
+
+
+@router.post("/batch", response_model=TaskBatchCreateResponse)
+async def create_tasks_batch(payload: TaskBatchCreateRequest, background_tasks: BackgroundTasks):
+    for task_payload in payload.tasks:
+        for url in task_payload.urls:
+            _validate_url(url)
+
+    created_tasks = []
+
+    async with async_session() as db:
+        for task_payload in payload.tasks:
+            task = Task(
+                urls=task_payload.urls,
+                keep_citations=task_payload.keep_citations,
+                publish_type=PublishType(task_payload.publish_type),
+                scheduled_at=task_payload.scheduled_at,
+                trigger_source=task_payload.trigger_source,
+                model_provider=task_payload.model_provider,
+                model_name=task_payload.model_name,
+                status=TaskStatus.fetching,
+                progress=0,
+                stage_detail="等待开始...",
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+            )
+            db.add(task)
+            created_tasks.append(task)
+
+        await db.commit()
+
+        for task in created_tasks:
+            await db.refresh(task)
+
+    from app.services.pipeline import run_pipeline
+
+    for task, task_payload in zip(created_tasks, payload.tasks):
+        background_tasks.add_task(
+            run_pipeline,
+            task_id=task.id,
+            urls=task_payload.urls,
+            provider_key=task_payload.model_provider,
+            model_name=task_payload.model_name,
+            keep_citations=task_payload.keep_citations,
+            publish_type=task_payload.publish_type,
+            scheduled_at=task_payload.scheduled_at.isoformat() if task_payload.scheduled_at else None,
+        )
+
+    task_ids = [task.id for task in created_tasks]
+    return {"task_ids": task_ids, "count": len(task_ids)}
 
 @router.get("", response_model=TaskListResponse)
 async def list_tasks(page: int = 1, page_size: int = 10):

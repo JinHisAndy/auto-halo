@@ -19,6 +19,8 @@ from app.db import async_session, init_db
 from app.main import app
 from app.models.task import Task
 from app.schemas.task import TaskBatchCreateRequest
+from app.services.fetcher.base import FetchedContent
+from app.services.parser.service import ParsedArticle
 
 
 async def _reset_tasks_table():
@@ -136,3 +138,108 @@ def test_task_create_template_uses_independent_task_blocks_and_batch_submit():
     assert "开始任务" in source
     assert "创建任务" not in source
     assert "'/api/tasks/batch'" in source or '"/api/tasks/batch"' in source
+
+
+def test_run_pipeline_merges_multiple_urls_into_single_rewrite_input(monkeypatch):
+    import app.services.pipeline as pipeline_module
+    import app.services.fetcher.service as fetcher_module
+    import app.services.parser.service as parser_module
+    import app.services.storage.minio_client as minio_module
+
+    events = []
+    rewrite_calls = []
+
+    fetched_content = {
+        "https://example.com/one": FetchedContent(
+            title="Source One",
+            html_raw="<html><body>one</body></html>",
+            text_content="one text",
+            rich_html="<article><p>Alpha body</p></article>",
+        ),
+        "https://example.com/two": FetchedContent(
+            title="Source Two",
+            html_raw="<html><body>two</body></html>",
+            text_content="two text",
+            rich_html="<article><p>Beta body</p></article>",
+        ),
+    }
+
+    parsed_content = {
+        "Source One": ParsedArticle(
+            title="Parsed Source One",
+            clean_text="Alpha clean text",
+            rich_html="<article><p>Alpha body</p></article>",
+        ),
+        "Source Two": ParsedArticle(
+            title="Parsed Source Two",
+            clean_text="Beta clean text",
+            rich_html="<article><p>Beta body</p></article>",
+        ),
+    }
+
+    async def fake_update_task(*args, **kwargs):
+        return None
+
+    async def fake_broadcast(*args, **kwargs):
+        return None
+
+    async def fake_load_pipeline_config(provider_key):
+        return "http", {"api_key": "key", "base_url": "https://example.com"}
+
+    async def fake_fetch(url, mode="http"):
+        events.append(("fetch", url))
+        return fetched_content[url]
+
+    async def fake_parse(content):
+        events.append(("parse", content.title))
+        return parsed_content[content.title]
+
+    async def fake_save_original(db, article_title, html_raw, parsed):
+        events.append(("save_original", article_title))
+        return f"minio/{article_title}", {}
+
+    async def fake_rewrite_from_source(**kwargs):
+        events.append(("rewrite", kwargs["source_title"]))
+        rewrite_calls.append(kwargs)
+
+    class _DummySession:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(pipeline_module, "_update_task", fake_update_task)
+    monkeypatch.setattr(pipeline_module, "_broadcast_update", fake_broadcast)
+    monkeypatch.setattr(pipeline_module, "_load_pipeline_config", fake_load_pipeline_config)
+    monkeypatch.setattr(pipeline_module, "_rewrite_from_source", fake_rewrite_from_source)
+    monkeypatch.setattr(pipeline_module, "async_session", lambda: _DummySession())
+    monkeypatch.setattr(fetcher_module.fetcher_service, "fetch", fake_fetch)
+    monkeypatch.setattr(parser_module.parser_service, "parse", fake_parse)
+    monkeypatch.setattr(minio_module.minio_storage, "save_original", fake_save_original)
+
+    asyncio.run(
+        pipeline_module.run_pipeline(
+            task_id="task-1",
+            urls=["https://example.com/one", "https://example.com/two"],
+            provider_key="openai",
+            model_name="gpt-test",
+            keep_citations=False,
+            publish_type="immediate",
+            scheduled_at=None,
+        )
+    )
+
+    assert rewrite_calls and len(rewrite_calls) == 1
+    rewrite_source = rewrite_calls[0]["rewrite_source"]
+    assert rewrite_calls[0]["source_title"] == "Parsed Source One"
+    assert "Alpha body" in rewrite_source
+    assert "Beta body" in rewrite_source
+    assert "去重并处理冲突" in rewrite_source
+    assert "不要按来源分别输出多篇文章" in rewrite_source
+    assert rewrite_calls[0]["source_validation_html"].count("<article>") == 2
+    assert events[-1] == ("rewrite", "Parsed Source One")
+    assert [event for event in events if event[0] == "fetch"] == [
+        ("fetch", "https://example.com/one"),
+        ("fetch", "https://example.com/two"),
+    ]

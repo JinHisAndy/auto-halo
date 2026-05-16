@@ -125,3 +125,23 @@ def test_pipeline_prefers_rich_html_for_rewrite_and_publish_paths():
     assert "rewriter.rewrite(parsed.rich_html" in pipeline_source or "rewriter.rewrite(rewrite_source" in pipeline_source
     assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in pipeline_source
     assert "parsed.clean_text" in pipeline_source
+
+
+def test_pipeline_iterates_over_all_urls():
+    pipeline_source = (Path(__file__).resolve().parents[1] / "app" / "services" / "pipeline.py").read_text(encoding="utf-8")
+
+    assert "for idx, url in enumerate(urls)" in pipeline_source
+    assert "idx == 0" in pipeline_source
+    assert "len(urls)" in pipeline_source
+    assert "all_parsed_rich_html" in pipeline_source
+    assert "merged_rich_html" in pipeline_source
+
+
+def test_halo_client_ensures_tags_exist_before_publish():
+    source = (Path(__file__).resolve().parents[1] / "app" / "services" / "publisher" / "halo_client.py").read_text(encoding="utf-8")
+
+    assert "async def _ensure_tags_exist(" in source
+    assert "_ensure_tags_exist(client, site_url, api_token, tags)" in source
+    assert "tag.halo.run/v1alpha1" in source
+    assert "displayName" in source
+    assert '"kind": "Tag"' in source

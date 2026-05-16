@@ -491,3 +491,30 @@ def test_websocket_router_handles_followup_subscription_messages():
     source = Path("app/routers/ws.py").read_text(encoding="utf-8")
     assert "async def handle_message(" in source
     assert "await ws_manager.handle_message(websocket, data)" in source
+
+
+def test_task_list_router_accepts_page_params():
+    source = Path("app/routers/tasks.py").read_text(encoding="utf-8")
+    assert "page: int = 1" in source
+    assert "page_size: int = 10" in source
+    assert "total_pages" in source
+    assert "offset" in source
+
+
+def test_task_list_response_schema_has_pagination_fields():
+    source = Path("app/schemas/task.py").read_text(encoding="utf-8")
+    assert "total: int = 0" in source
+    assert "page: int = 1" in source
+    assert "page_size: int = 10" in source
+    assert "total_pages: int = 0" in source
+
+
+def test_task_list_template_has_pagination_controls():
+    source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
+    assert 'x-text="total"' in source
+    assert 'x-text="currentPage' in source
+    assert 'goToPage(currentPage - 1)' in source
+    assert 'goToPage(currentPage + 1)' in source
+    assert '上一页' in source
+    assert '下一页' in source
+    assert 'loadTasks()' in source

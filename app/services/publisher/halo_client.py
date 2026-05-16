@@ -1,6 +1,7 @@
 import json
 
 import httpx
+from slugify import slugify
 from sqlalchemy import select
 
 from app.models.system_config import SystemConfig
@@ -34,6 +35,59 @@ class HaloClient:
             return None
         return json.loads(row.value)
 
+    async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list[dict]) -> list[str]:
+        tag_names = []
+        for tag_info in tags:
+            name = tag_info["name"]
+            slug = slugify(name)
+            tag_names.append(name)
+
+            check_resp = await client.get(
+                f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
+                headers={"Authorization": f"Bearer {api_token}"},
+                params={"keyword": name},
+            )
+            existing = False
+            if check_resp.is_success:
+                items = check_resp.json().get("items", [])
+                found = [item for item in items
+                         if item.get("spec", {}).get("displayName") == name
+                         or item.get("metadata", {}).get("name") == slug]
+                if found:
+                    existing = True
+
+            if not existing:
+                color = tag_info.get("color", "blue")
+                color_map = {
+                    "blue": "#3B82F6", "indigo": "#6366F1", "teal": "#14B8A6",
+                    "emerald": "#10B981", "amber": "#F59E0B", "rose": "#F43F5E",
+                }
+                halo_color = color_map.get(color, "#3B82F6")
+
+                tag_payload = {
+                    "tag": {
+                        "spec": {
+                            "displayName": name,
+                            "slug": slug,
+                            "color": halo_color,
+                            "cover": "",
+                        },
+                        "apiVersion": "tag.halo.run/v1alpha1",
+                        "kind": "Tag",
+                        "metadata": {"name": slug},
+                    }
+                }
+                await client.post(
+                    f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
+                    headers={
+                        "Authorization": f"Bearer {api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json=tag_payload,
+                )
+
+        return tag_names
+
     async def test_connection(self, db_session) -> tuple[bool, str]:
         config = await self._load_config(db_session)
         if not config:
@@ -66,6 +120,9 @@ class HaloClient:
         current_title = title
 
         async with httpx.AsyncClient(timeout=30) as client:
+            if tags:
+                await self._ensure_tags_exist(client, site_url, api_token, tags)
+
             for attempt in range(0, 6):
                 slug_suffix = None if attempt == 0 else f"retry-{attempt}"
                 payload = self._build_payload(

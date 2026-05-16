@@ -553,42 +553,62 @@ async def run_pipeline(
 
         await _update_task(task_id, stage_detail="正在抓取网页内容...", progress=10)
         await _broadcast_update(task_id, "fetching", 10, "正在抓取网页内容...")
-        content = await fetcher_service.fetch(urls[0], mode=mode)
 
-        await _update_task(
-            task_id,
-            status=TaskStatus.parsing,
-            title=content.title,
-            stage_detail="正在解析文章内容和媒体文件...",
-            progress=25,
-        )
-        await _broadcast_update(task_id, "parsing", 25, "正在解析文章内容和媒体文件...")
-        current_stage = "parsing"
-        parsed = await parser_service.parse(content)
+        all_parsed_rich_html = []
+        all_parsed_clean_text = []
+        first_parsed = None
+        minio_path = None
 
-        await _update_task(
-            task_id,
-            original_content=parsed.rich_html or content.rich_html or parsed.clean_text,
-            stage_detail="正在上传原始文件到MinIO...",
-            progress=40,
-        )
-        await _broadcast_update(task_id, "parsing", 40, "正在上传原始文件到MinIO...")
+        for idx, url in enumerate(urls):
+            content = await fetcher_service.fetch(url, mode=mode)
 
-        async with async_session() as db:
-            minio_path, url_mapping = await minio_storage.save_original(db, parsed.title, content.html_raw, parsed)
+            await _update_task(
+                task_id,
+                status=TaskStatus.parsing,
+                title=content.title,
+                stage_detail=f"正在解析文章内容({idx+1}/{len(urls)})...",
+                progress=10 + 15 * (idx + 1) // len(urls),
+            )
+            await _broadcast_update(task_id, "parsing", 10 + 15 * (idx + 1) // len(urls),
+                                    f"正在解析文章内容({idx+1}/{len(urls)})...")
+            current_stage = "parsing"
+            parsed = await parser_service.parse(content)
 
-        _cleanup_local_files(parsed)
+            all_parsed_rich_html.append(parsed.rich_html or content.rich_html)
+            all_parsed_clean_text.append(parsed.clean_text or content.text_content)
+
+            async with async_session() as db:
+                saved_path, url_mapping = await minio_storage.save_original(
+                    db, parsed.title, content.html_raw, parsed
+                )
+
+            _cleanup_local_files(parsed)
+
+            if idx == 0:
+                first_parsed = parsed
+                minio_path = saved_path
+                original_content = parsed.rich_html or content.rich_html or parsed.clean_text
+                title = parsed.title
+                rewrite_source = parsed.rich_html or parsed.clean_text
+                source_validation_html = parsed.rich_html
+                final_url_mapping = url_mapping if url_mapping else None
+
+        if not first_parsed:
+            raise ValueError("No content could be fetched from any URL")
+
+        merged_rich_html = "\n<hr/>\n".join(all_parsed_rich_html)
+        merged_clean_text = "\n\n---\n\n".join(all_parsed_clean_text)
 
         await _update_task(
             task_id,
             status=TaskStatus.rewriting,
             minio_original_path=minio_path,
+            original_content=merged_rich_html or merged_clean_text or original_content,
             stage_detail="AI正在重写文章...",
             progress=55,
         )
         await _broadcast_update(task_id, "rewriting", 55, "AI正在重写文章...")
         current_stage = "rewriting"
-        rewrite_source = parsed.rich_html or parsed.clean_text
         await _rewrite_from_source(
             task_id=task_id,
             provider_key=provider_key,
@@ -597,10 +617,10 @@ async def run_pipeline(
             keep_citations=keep_citations,
             publish_type=publish_type,
             scheduled_at=scheduled_at,
-            source_title=parsed.title,
+            source_title=title,
             rewrite_source=rewrite_source,
-            source_validation_html=parsed.rich_html,
-            url_mapping=url_mapping if url_mapping else None,
+            source_validation_html=source_validation_html,
+            url_mapping=final_url_mapping,
         )
 
     except Exception as e:

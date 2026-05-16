@@ -53,3 +53,7 @@ class TaskResponse(BaseModel):
 
 class TaskListResponse(BaseModel):
     tasks: list[TaskResponse]
+    total: int = 0
+    page: int = 1
+    page_size: int = 10
+    total_pages: int = 0

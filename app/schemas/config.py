@@ -11,6 +11,13 @@ class ProviderConfig(BaseModel):
     models: list[str] = []
 
 
+class OpenApiKeyItem(BaseModel):
+    id: str
+    key: str
+    label: str = ""
+    created_at: str = ""
+
+
 class MinioConfig(BaseModel):
     endpoint: str
     access_key: str
@@ -29,7 +36,7 @@ class ConfigResponse(BaseModel):
     minio: Optional[MinioConfig]
     halo: Optional[HaloConfig]
     fetch_mode: str = "http"
-    open_api_key: Optional[str] = None
+    open_api_keys: list[OpenApiKeyItem] = []
     default_model_provider: Optional[str] = None
     default_model_name: Optional[str] = None
 

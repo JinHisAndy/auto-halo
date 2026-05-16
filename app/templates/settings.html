@@ -4,14 +4,17 @@
     <h1 class="text-2xl font-bold mb-6">系统配置</h1>
 
     <div class="space-y-6">
-        <div class="bg-white rounded-lg shadow p-6">
+<div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-lg font-semibold mb-4">模型供应商</h2>
 
             <template x-for="(provider, pidx) in providers" :key="pidx">
                 <div class="border rounded-lg p-4 mb-3">
                     <div class="flex justify-between items-center mb-3">
                         <input type="text" x-model="provider.name" @input="repairDefaultModelSelection()" class="font-medium border rounded px-2 py-1 text-sm" placeholder="供应商名称">
-                        <button @click="removeProvider(pidx)" class="text-red-500 text-sm hover:text-red-700">删除</button>
+                        <div class="flex items-center gap-2">
+                            <button x-show="provider.name && provider.selectedModel" @click="setDefaultModel(provider)" class="text-xs px-2 py-1 rounded border" :class="isDefaultModel(provider) ? 'bg-indigo-100 border-indigo-300 text-indigo-700' : 'hover:bg-gray-50'" x-text="isDefaultModel(provider) ? '已设为默认' : '设为全局默认模型'"></button>
+                            <button @click="removeProvider(pidx)" class="text-red-500 text-sm hover:text-red-700">删除</button>
+                        </div>
                     </div>
                     <div class="space-y-2">
                         <input type="text" x-model="provider.base_url" class="w-full border rounded px-3 py-2 text-sm" placeholder="Base URL">
@@ -20,13 +23,16 @@
                             <button @click="fetchProviderModels(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">获取模型列表</button>
                             <button @click="testProviderConnection(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="provider.testing ? '测试中...' : '测试连接'"></button>
                         </div>
-<div x-show="provider.models.length > 0" class="mt-2">
+                        <div x-show="provider.models.length > 0" class="mt-2">
                             <select class="w-full border rounded px-3 py-2 text-sm" x-model="provider.selectedModel">
                                 <option value="">选择模型</option>
                                 <template x-for="m in provider.models" :key="m.id">
                                     <option :value="m.id" x-text="m.name || m.id"></option>
                                 </template>
                             </select>
+                            <p class="text-xs text-gray-400 mt-1" x-show="provider.models.length > 0">
+                                模型列表已持久化保存
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -80,36 +86,33 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-lg shadow p-6">
+<div class="bg-white rounded-lg shadow p-6">
             <div class="flex items-center justify-between mb-4 gap-3">
                 <h2 class="text-lg font-semibold">Open API</h2>
                 <a href="/open-api/docs" class="text-sm text-indigo-600 hover:text-indigo-800">查看 /open-api/docs</a>
             </div>
-<div class="space-y-3">
+            <div class="space-y-3">
                 <div class="flex gap-2">
-                    <input type="password" x-model="openApiKey" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="API Key" @focus="openApiKey=''" x-bind:placeholder="openApiKey ? '••••••••' : 'API Key'">
+                    <input type="text" x-model="newKeyLabel" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="Key 标签 (可选)">
                     <button @click="generateOpenApiKey" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">生成 Key</button>
                 </div>
-                <div class="grid gap-3 md:grid-cols-2">
-                    <div>
-                        <label class="block text-sm text-gray-600 mb-1">默认提供商</label>
-                        <select x-model="defaultModelProvider" @change="syncDefaultModelSelection()" class="w-full border rounded px-3 py-2 text-sm">
-                            <option value="">选择提供商</option>
-                            <template x-for="provider in providers" :key="provider.name">
-                                <option :value="provider.name.toLowerCase()" x-text="provider.name"></option>
-                            </template>
-                        </select>
+                <div x-show="openApiKeys.length === 0" class="text-sm text-gray-400 py-2">暂无 API Key，请点击"生成 Key"创建</div>
+                <template x-for="(keyItem, kidx) in openApiKeys" :key="keyItem.id">
+                    <div class="flex items-center gap-2 border rounded p-3">
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <input type="text" :value="keyItem.showKey ? keyItem.key : keyItem.key.replace(/./g, '*')" class="text-sm font-mono border rounded px-2 py-1 bg-gray-50 flex-1 min-w-0" readonly>
+                                <button @click="keyItem.showKey = !keyItem.showKey" class="text-xs text-gray-500 hover:text-gray-700" x-text="keyItem.showKey ? '隐藏' : '预览'"></button>
+                                <button @click="copyKey(keyItem.key)" class="text-xs text-indigo-500 hover:text-indigo-700">复制</button>
+                                <button @click="deleteKey(keyItem.id, kidx)" class="text-xs text-red-500 hover:text-red-700">删除</button>
+                            </div>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span x-show="keyItem.label" class="text-xs text-gray-500" x-text="keyItem.label"></span>
+                                <span class="text-xs text-gray-400" x-text="keyItem.created_at ? '创建于: ' + new Date(keyItem.created_at).toLocaleString() : ''"></span>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label class="block text-sm text-gray-600 mb-1">默认模型</label>
-                        <select x-model="defaultModelName" class="w-full border rounded px-3 py-2 text-sm">
-                            <option value="">选择模型</option>
-                            <template x-for="model in getDefaultProviderModels()" :key="model.id">
-                                <option :value="model.id" x-text="model.name || model.id"></option>
-                            </template>
-                        </select>
-                    </div>
-                </div>
+                </template>
             </div>
         </div>
 
@@ -129,7 +132,8 @@ function settingsPage() {
         minio: { endpoint: '', access_key: '', secret_key: '', bucket: '', testing: false },
         halo: { site_url: '', api_token: '', testing: false },
         fetchMode: 'http',
-        openApiKey: '',
+        openApiKeys: [],
+        newKeyLabel: '',
         defaultModelProvider: '',
         defaultModelName: '',
         saving: false,
@@ -146,29 +150,55 @@ function settingsPage() {
         async init() {
             const resp = await fetch('/api/config');
             const cfg = await resp.json();
-this.providers = cfg.providers.map(p => ({
+            this.providers = cfg.providers.map(p => ({
                 name: p.name, api_key: p.api_key, base_url: p.base_url,
                 models: p.models || [], selectedModel: '', testing: false,
             }));
             if (cfg.minio) this.minio = { ...this.minio, ...cfg.minio, testing: false };
             if (cfg.halo) this.halo = { ...this.halo, ...cfg.halo, testing: false };
             this.fetchMode = cfg.fetch_mode || 'http';
-            this.openApiKey = cfg.open_api_key || '';
+            this.openApiKeys = (cfg.open_api_keys || []).map(k => ({ ...k, showKey: false }));
             this.defaultModelProvider = cfg.default_model_provider || '';
             this.defaultModelName = cfg.default_model_name || '';
             this.repairDefaultModelSelection();
         },
 
-addProvider() {
+        addProvider() {
             this.providers.push({ name: '', api_key: '', base_url: '', models: [], selectedModel: '', testing: false });
             this.repairDefaultModelSelection();
         },
 
-        removeProvider(idx) { this.providers.splice(idx, 1); this.repairDefaultModelSelection(); },
+        removeProvider(idx) {
+            const provider = this.providers[idx];
+            if (provider && this.defaultModelProvider === provider.name.toLowerCase()) {
+                this.defaultModelProvider = '';
+                this.defaultModelName = '';
+            }
+            this.providers.splice(idx, 1);
+            this.repairDefaultModelSelection();
+            this.saveSilent();
+        },
 
         addPreset(preset) {
             this.providers.push({ ...preset, models: [], selectedModel: '', testing: false });
             this.repairDefaultModelSelection();
+        },
+
+        isDefaultModel(provider) {
+            return provider.name && provider.name.toLowerCase() === this.defaultModelProvider
+                && provider.selectedModel && provider.selectedModel === this.defaultModelName;
+        },
+
+        setDefaultModel(provider) {
+            if (!provider.name || !provider.selectedModel) return;
+            if (this.isDefaultModel(provider)) {
+                this.defaultModelProvider = '';
+                this.defaultModelName = '';
+            } else {
+                this.defaultModelProvider = provider.name.toLowerCase();
+                this.defaultModelName = provider.selectedModel;
+            }
+            this.saveSilent();
         },
 
         getDefaultProvider() {
@@ -197,7 +227,7 @@ addProvider() {
             }
         },
 
-async fetchProviderModels(provider) {
+        async fetchProviderModels(provider) {
             if (!provider.name) return;
             await this.saveSilent();
             try {
@@ -207,6 +237,7 @@ async fetchProviderModels(provider) {
                     provider.models = data.models || [];
                     if (provider.models.length > 0) provider.selectedModel = provider.models[0].id;
                     if (provider.name.toLowerCase() === this.defaultModelProvider) this.syncDefaultModelSelection();
+                    await this.saveSilent();
                     this.showToast('模型列表获取成功', 'success');
                 } else {
                     this.showToast(data.detail || '获取模型列表失败', 'error');
@@ -216,7 +247,7 @@ async fetchProviderModels(provider) {
             }
         },
 
-async testConnection(service) {
+        async testConnection(service) {
             let url;
             if (service === 'minio') {
                 this.minio.testing = true;
@@ -259,13 +290,13 @@ async testConnection(service) {
             provider.testing = false;
         },
 
-async saveSilent() {
+        async saveSilent() {
             const payload = {
                 providers: this.providers,
                 minio: this.minio,
                 halo: this.halo,
                 fetch_mode: this.fetchMode,
-                open_api_key: this.openApiKey,
+                open_api_key: null,
                 default_model_provider: this.defaultModelProvider || null,
                 default_model_name: this.defaultModelName || null,
             };
@@ -284,7 +315,7 @@ async saveSilent() {
                     minio: this.minio,
                     halo: this.halo,
                     fetch_mode: this.fetchMode,
-                    open_api_key: this.openApiKey,
+                    open_api_key: null,
                     default_model_provider: this.defaultModelProvider || null,
                     default_model_name: this.defaultModelName || null,
                 };
@@ -311,13 +342,46 @@ async saveSilent() {
             setTimeout(() => { this.toast = ''; }, 3000);
         },
 
-        generateOpenApiKey() {
-            const chars = '0123456789abcdef';
-            let key = '';
-            for (let i = 0; i < 32; i++) {
-                key += chars[Math.floor(Math.random() * 16)];
+        async generateOpenApiKey() {
+            try {
+                const label = this.newKeyLabel || '';
+                const resp = await fetch(`/api/config/keys?label=${encodeURIComponent(label)}`, { method: 'POST' });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    this.openApiKeys.push({ ...data, showKey: true });
+                    this.newKeyLabel = '';
+                    this.showToast('API Key 已生成', 'success');
+                } else {
+                    const data = await resp.json();
+                    this.showToast(data.detail || '生成失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('生成失败: ' + e.message, 'error');
             }
-            this.openApiKey = key;
+        },
+
+        async deleteKey(keyId, idx) {
+            if (!confirm('确认删除此 API Key？')) return;
+            try {
+                const resp = await fetch(`/api/config/keys/${keyId}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    this.openApiKeys.splice(idx, 1);
+                    this.showToast('API Key 已删除', 'success');
+                } else {
+                    const data = await resp.json();
+                    this.showToast(data.detail || '删除失败', 'error');
+                }
+            } catch (e) {
+                this.showToast('删除失败: ' + e.message, 'error');
+            }
+        },
+
+        copyKey(key) {
+            navigator.clipboard.writeText(key).then(() => {
+                this.showToast('已复制到剪贴板', 'success');
+            }).catch(() => {
+                this.showToast('复制失败', 'error');
+            });
         },
     }
 }

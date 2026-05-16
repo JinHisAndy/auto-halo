@@ -2,12 +2,43 @@ import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
+import tempfile
+import os
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.schemas.task import TaskResponse
 from app.services.fetcher.base import FetchedContent
 from app.services.parser.service import parser_service
+
+
+def test_parser_classifies_file_by_content_type():
+    ps = parser_service
+    assert ps._classify_content_type("image/jpeg")[0] == "image"
+    assert ps._classify_content_type("image/png")[0] == "image"
+    assert ps._classify_content_type("video/mp4")[0] == "video"
+    assert ps._classify_content_type("audio/mpeg")[0] == "audio"
+    assert ps._classify_content_type("application/pdf")[0] == "attachment"
+
+
+def test_parser_content_type_falls_back_to_url_extension():
+    ps = parser_service
+    file_type, ext = ps._classify_content_type("application/octet-stream")
+    assert file_type == "attachment"
+    assert ext == ".bin"
+
+
+def test_parser_image_with_content_type_gets_correct_extension():
+    ps = parser_service
+    file_type, ext = ps._classify_content_type("image/webp")
+    assert file_type == "image"
+    assert ext == ".webp"
+
+
+def test_parser_unknown_image_content_type_uses_mimetypes():
+    ps = parser_service
+    file_type, ext = ps._classify_content_type("image/x-icon")
+    assert file_type == "image"
 
 
 def test_task_response_accepts_string_halo_post_id():

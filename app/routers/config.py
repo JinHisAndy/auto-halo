@@ -1,5 +1,7 @@
 import json
 import logging
+import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
@@ -9,6 +11,7 @@ from app.models.system_config import SystemConfig
 from app.schemas.config import (
     ConfigSaveRequest,
     ConfigResponse,
+    OpenApiKeyItem,
     ProviderConfig,
     MinioConfig,
     HaloConfig,
@@ -20,8 +23,12 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 MASKED_OPEN_API_KEY = "********"
 
 
-def _mask_open_api_key(value: str | None) -> str | None:
-    return MASKED_OPEN_API_KEY if value else None
+def _mask_open_api_key(key: str | None) -> str | None:
+    if not key:
+        return None
+    if len(key) <= 8:
+        return MASKED_OPEN_API_KEY
+    return key[:4] + MASKED_OPEN_API_KEY + key[-4:]
 
 
 async def _get_config_row(db, key: str) -> SystemConfig | None:
@@ -39,7 +46,7 @@ async def get_config():
     minio_cfg = None
     halo_cfg = None
     fetch_mode = "http"
-    open_api_key = None
+    open_api_keys = []
     default_model_provider = None
     default_model_name = None
 
@@ -53,9 +60,29 @@ async def get_config():
             halo_cfg = HaloConfig(**value)
         elif row.key == "fetch.mode":
             fetch_mode = value if isinstance(value, str) else value.get("value", "http")
+        elif row.key == "open_api.keys":
+            keys = value.get("keys", [])
+            for k in keys:
+                open_api_keys.append(
+                    OpenApiKeyItem(
+                        id=k.get("id", ""),
+                        key=_mask_open_api_key(k.get("key", "")),
+                        label=k.get("label", ""),
+                        created_at=k.get("created_at", ""),
+                    )
+                )
         elif row.key == "open_api.key":
             configured_key = value if isinstance(value, str) else value.get("key")
-            open_api_key = _mask_open_api_key(configured_key)
+            if configured_key:
+                migration_id = str(uuid.uuid4())
+                open_api_keys.append(
+                    OpenApiKeyItem(
+                        id=migration_id,
+                        key=_mask_open_api_key(configured_key),
+                        label="migrated key",
+                        created_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                )
         elif row.key == "open_api.default_model":
             default_model_provider = value.get("provider")
             default_model_name = value.get("model") or value.get("name")
@@ -65,7 +92,7 @@ async def get_config():
         minio=minio_cfg,
         halo=halo_cfg,
         fetch_mode=fetch_mode,
-        open_api_key=open_api_key,
+        open_api_keys=open_api_keys,
         default_model_provider=default_model_provider,
         default_model_name=default_model_name,
     )
@@ -125,24 +152,30 @@ async def save_config(payload: ConfigSaveRequest):
             db.add(SystemConfig(key=key, value=value))
 
         key = "open_api.key"
-        persisted_open_api_key = payload.open_api_key
-        if payload.open_api_key == MASKED_OPEN_API_KEY:
-            existing_open_api_key_row = await _get_config_row(db, key)
-            if existing_open_api_key_row is not None:
-                existing_open_api_key_value = json.loads(existing_open_api_key_row.value)
-                if existing_open_api_key_value is not None:
-                    persisted_open_api_key = (
-                        existing_open_api_key_value
-                        if isinstance(existing_open_api_key_value, str)
-                        else existing_open_api_key_value.get("key")
-                    )
+        if payload.open_api_key and payload.open_api_key != MASKED_OPEN_API_KEY:
+            new_key_value = payload.open_api_key
+            keys_key = "open_api.keys"
+            keys_result = await db.execute(select(SystemConfig).where(SystemConfig.key == keys_key))
+            keys_row = keys_result.scalar_one_or_none()
+            existing_keys_list = []
+            if keys_row:
+                existing_keys_list = json.loads(keys_row.value).get("keys", [])
+            new_entry = {
+                "id": str(uuid.uuid4()),
+                "key": new_key_value,
+                "label": "",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+            existing_keys_list.append(new_entry)
+            if keys_row:
+                keys_row.value = json.dumps({"keys": existing_keys_list})
+            else:
+                db.add(SystemConfig(key=keys_key, value=json.dumps({"keys": existing_keys_list})))
 
-        value = json.dumps({"key": persisted_open_api_key})
-        row = await _get_config_row(db, key)
+        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
+        row = result.scalar_one_or_none()
         if row:
-            row.value = value
-        else:
-            db.add(SystemConfig(key=key, value=value))
+            await db.delete(row)
 
         key = "open_api.default_model"
         value = json.dumps(
@@ -151,7 +184,8 @@ async def save_config(payload: ConfigSaveRequest):
                 "model": payload.default_model_name,
             }
         )
-        row = await _get_config_row(db, key)
+        result = await db.execute(select(SystemConfig).where(SystemConfig.key == key))
+        row = result.scalar_one_or_none()
         if row:
             row.value = value
         else:
@@ -212,3 +246,53 @@ async def list_models(provider_key: str):
             return {"models": models}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"获取模型列表失败: {str(e)}")
+
+@router.post("/keys")
+async def generate_key(label: str = ""):
+    import secrets
+    key_value = secrets.token_hex(16)
+    key_id = str(uuid.uuid4())
+    new_entry = {
+        "id": key_id,
+        "key": key_value,
+        "label": label,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    async with async_session() as db:
+        result = await db.execute(
+            select(SystemConfig).where(SystemConfig.key == "open_api.keys")
+        )
+        row = result.scalar_one_or_none()
+        keys_list = []
+        if row:
+            keys_list = json.loads(row.value).get("keys", [])
+        keys_list.append(new_entry)
+        value = json.dumps({"keys": keys_list})
+        if row:
+            row.value = value
+        else:
+            db.add(SystemConfig(key="open_api.keys", value=value))
+        await db.commit()
+
+    return {"id": key_id, "key": key_value, "label": label, "created_at": new_entry["created_at"]}
+
+@router.delete("/keys/{key_id}")
+async def delete_key(key_id: str):
+    async with async_session() as db:
+        result = await db.execute(
+            select(SystemConfig).where(SystemConfig.key == "open_api.keys")
+        )
+        row = result.scalar_one_or_none()
+        if not row:
+            raise HTTPException(status_code=404, detail="No keys configured")
+        data = json.loads(row.value)
+        keys_list = data.get("keys", [])
+        original_len = len(keys_list)
+        keys_list = [k for k in keys_list if k.get("id") != key_id]
+        if len(keys_list) == original_len:
+            raise HTTPException(status_code=404, detail="Key not found")
+        row.value = json.dumps({"keys": keys_list})
+        await db.commit()
+
+    return {"message": "Key deleted"}

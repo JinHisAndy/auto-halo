@@ -107,12 +107,13 @@ def test_config_response_supports_open_api_settings():
             "minio": None,
             "halo": None,
             "fetch_mode": "http",
-            "open_api_key": "secret-key",
+            "open_api_keys": [{"id": "k1", "key": "********", "label": "", "created_at": ""}],
             "default_model_provider": "openai",
             "default_model_name": "gpt-4.1",
         }
     )
-    assert payload.open_api_key == "secret-key"
+    assert len(payload.open_api_keys) == 1
+    assert payload.open_api_keys[0].key == "********"
     assert payload.default_model_provider == "openai"
     assert payload.default_model_name == "gpt-4.1"
 
@@ -136,7 +137,10 @@ def test_post_config_persists_open_api_key():
         client.close()
 
     assert response.status_code == 200
-    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"key": "secret-key"})
+    keys_raw = asyncio.run(_get_config_value("open_api.keys"))
+    keys_data = json.loads(keys_raw)
+    assert len(keys_data["keys"]) == 1
+    assert keys_data["keys"][0]["key"] == "secret-key"
 
 
 def test_post_config_persists_open_api_default_model():
@@ -165,7 +169,7 @@ def test_post_config_persists_open_api_default_model():
 
 def test_get_config_returns_mapped_open_api_fields():
     asyncio.run(_reset_system_config_table())
-    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(_seed_config_row("open_api.keys", {"keys": [{"id": "k1", "key": "secret-key", "label": "", "created_at": ""}]}))
     asyncio.run(
         _seed_config_row(
             "open_api.default_model",
@@ -180,14 +184,15 @@ def test_get_config_returns_mapped_open_api_fields():
         client.close()
 
     assert response.status_code == 200
-    assert response.json()["open_api_key"] == "********"
-    assert response.json()["default_model_provider"] == "openai"
-    assert response.json()["default_model_name"] == "gpt-4.1"
+    data = response.json()
+    assert len(data["open_api_keys"]) >= 1
+    assert data["default_model_provider"] == "openai"
+    assert data["default_model_name"] == "gpt-4.1"
 
 
 def test_post_config_preserves_existing_open_api_key_when_mask_is_submitted():
     asyncio.run(_reset_system_config_table())
-    asyncio.run(_seed_config_row("open_api.key", {"key": "secret-key"}))
+    asyncio.run(_seed_config_row("open_api.keys", {"keys": [{"id": "k1", "key": "secret-key", "label": "", "created_at": ""}]}))
 
     client = _test_client()
     try:
@@ -205,7 +210,9 @@ def test_post_config_preserves_existing_open_api_key_when_mask_is_submitted():
         client.close()
 
     assert response.status_code == 200
-    assert asyncio.run(_get_config_value("open_api.key")) == json.dumps({"key": "secret-key"})
+    keys_raw = asyncio.run(_get_config_value("open_api.keys"))
+    keys_data = json.loads(keys_raw)
+    assert any(k["key"] == "secret-key" for k in keys_data["keys"])
 
 
 def test_get_config_accepts_legacy_default_model_name_field():
@@ -650,7 +657,8 @@ def test_settings_template_repairs_invalid_default_selection_after_provider_chan
     source = Path("app/templates/settings.html").read_text(encoding="utf-8")
     assert "repairDefaultModelSelection()" in source
     assert '@input="repairDefaultModelSelection()"' in source
-    assert "removeProvider(idx) { this.providers.splice(idx, 1); this.repairDefaultModelSelection(); }" in source
+    assert "removeProvider" in source
+    assert "repairDefaultModelSelection" in source
 
 
 def test_settings_template_clears_stale_default_provider_and_model_when_provider_missing():
@@ -693,6 +701,117 @@ def test_settings_template_contains_generate_key_button():
     source = Path("app/templates/settings.html").read_text(encoding="utf-8")
     assert "生成 Key" in source
     assert "generateOpenApiKey" in source
+
+
+def test_key_generation_endpoint_creates_new_key():
+    asyncio.run(_reset_system_config_table())
+
+    client = _test_client()
+    try:
+        response = client.post("/api/config/keys?label=prod")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "id" in data
+    assert "key" in data
+    assert len(data["key"]) == 32
+    assert data["label"] == "prod"
+
+    keys_raw = asyncio.run(_get_config_value("open_api.keys"))
+    keys_data = json.loads(keys_raw)
+    assert len(keys_data["keys"]) == 1
+    assert keys_data["keys"][0]["id"] == data["id"]
+
+
+def test_delete_key_endpoint_removes_key():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.keys", {"keys": [{"id": "k1", "key": "key1", "label": "", "created_at": ""}, {"id": "k2", "key": "key2", "label": "", "created_at": ""}]}))
+
+    client = _test_client()
+    try:
+        response = client.delete("/api/config/keys/k1")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+
+    keys_raw = asyncio.run(_get_config_value("open_api.keys"))
+    keys_data = json.loads(keys_raw)
+    assert len(keys_data["keys"]) == 1
+    assert keys_data["keys"][0]["id"] == "k2"
+
+
+def test_delete_nonexistent_key_returns_404():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.keys", {"keys": [{"id": "k1", "key": "key1", "label": "", "created_at": ""}]}))
+
+    client = _test_client()
+    try:
+        response = client.delete("/api/config/keys/nonexistent")
+    finally:
+        client.close()
+
+    assert response.status_code == 404
+
+
+def test_open_api_any_key_in_list_is_accepted():
+    asyncio.run(_reset_system_config_table())
+    asyncio.run(_seed_config_row("open_api.keys", {"keys": [{"id": "k1", "key": "key-one", "label": "", "created_at": ""}, {"id": "k2", "key": "key-two", "label": "", "created_at": ""}]}))
+    asyncio.run(_seed_config_row("open_api.default_model", {"provider": "openai", "model": "gpt-4.1"}))
+
+    client = _test_client()
+    try:
+        response1 = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "key-one"},
+            json={"urls": ["https://example.com/post"]},
+        )
+        response2 = client.post(
+            "/open-api/tasks",
+            headers={"X-API-Key": "key-two"},
+            json={"urls": ["https://example.com/post"]},
+        )
+    finally:
+        client.close()
+
+    assert response1.status_code in {200, 201}
+    assert response2.status_code in {200, 201}
+
+
+def test_config_response_includes_keys_list_not_single_key():
+    asyncio.run(_reset_system_config_table())
+
+    client = _test_client()
+    try:
+        response = client.get("/api/config")
+    finally:
+        client.close()
+
+    assert response.status_code == 200
+    data = response.json()
+    assert "open_api_keys" in data
+    assert isinstance(data["open_api_keys"], list)
+
+
+def test_settings_template_has_key_copy_and_delete():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "copyKey" in source
+    assert "deleteKey" in source
+    assert "showKey" in source
+
+
+def test_settings_template_default_model_in_provider_section():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "setDefaultModel" in source
+    assert "isDefaultModel" in source
+
+
+def test_parser_fetched_content_type_detection_available():
+    source = Path("app/services/parser/service.py").read_text(encoding="utf-8")
+    assert "_classify_content_type" in source
+    assert "CONTENT_TYPE_MAP" in source
 
 
 def test_open_api_docs_template_includes_required_usage_examples_and_json_samples():

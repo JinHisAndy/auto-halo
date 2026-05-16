@@ -29,19 +29,31 @@ async def _require_api_key(x_api_key: str | None):
 
     async with async_session() as db:
         result = await db.execute(
-            select(SystemConfig).where(SystemConfig.key == "open_api.key")
+            select(SystemConfig).where(SystemConfig.key == "open_api.keys")
         )
-        row = result.scalar_one_or_none()
+        keys_row = result.scalar_one_or_none()
 
-    configured_key = None
-    if row is not None:
-        value = json.loads(row.value)
-        configured_key = value if isinstance(value, str) else value.get("key")
+    configured_keys = []
+    if keys_row is not None:
+        value = json.loads(keys_row.value)
+        configured_keys = [k.get("key") for k in value.get("keys", []) if k.get("key")]
 
-    if not configured_key:
+    if not configured_keys:
+        async with async_session() as db:
+            result = await db.execute(
+                select(SystemConfig).where(SystemConfig.key == "open_api.key")
+            )
+            legacy_row = result.scalar_one_or_none()
+            if legacy_row is not None:
+                value = json.loads(legacy_row.value)
+                legacy_key = value if isinstance(value, str) else value.get("key")
+                if legacy_key:
+                    configured_keys.append(legacy_key)
+
+    if not configured_keys:
         raise HTTPException(status_code=503, detail="Open API key is not configured")
 
-    if x_api_key != configured_key:
+    if x_api_key not in configured_keys:
         raise HTTPException(status_code=403, detail="Invalid API key")
 
 

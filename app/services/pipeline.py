@@ -13,7 +13,7 @@ from app.services.tagging.service import generate_tags_from_rewritten_content
 logger = logging.getLogger(__name__)
 
 MULTI_URL_MERGE_INSTRUCTION = (
-    "以下内容来自多个不同来源的文章。"
+    "以下是从多个来源收集的文章内容。"
     "请先综合理解全部信息，去重并处理冲突，"
     "再按清晰的逻辑结构整合成一篇统一文章，"
     "不要按来源分别输出多篇文章。\n\n"

@@ -20,7 +20,6 @@
                         <input type="text" x-model="provider.base_url" class="w-full border rounded px-3 py-2 text-sm" placeholder="Base URL">
                         <input type="password" x-model="provider.api_key" class="w-full border rounded px-3 py-2 text-sm" placeholder="API Key" @focus="provider.api_key=''" x-bind:placeholder="provider.api_key ? '••••••••' : 'API Key'">
                         <div class="flex gap-2">
-                            <button @click="fetchProviderModels(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">获取模型列表</button>
                             <button @click="testProviderConnection(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="provider.testing ? '测试中...' : '测试连接'"></button>
                         </div>
                         <div x-show="provider.models.length > 0" class="mt-2">
@@ -74,6 +73,7 @@
                 </div>
                 <p class="text-xs text-gray-400 mt-1">未指定模型时，Open API 将使用此全局默认模型</p>
             </div>
+
         </div>
 
         <div class="bg-white rounded-lg shadow p-6">
@@ -176,7 +176,7 @@ function settingsPage() {
             const cfg = await resp.json();
             this.providers = cfg.providers.map(p => ({
                 name: p.name, api_key: p.api_key, base_url: p.base_url,
-                models: p.models || [], selectedModel: '', testing: false,
+                models: p.models || [], selectedModel: (p.models && p.models.length > 0) ? p.models[0].id : '', testing: false,
             }));
             if (cfg.minio) this.minio = { ...this.minio, ...cfg.minio, testing: false };
             if (cfg.halo) this.halo = { ...this.halo, ...cfg.halo, testing: false };
@@ -309,6 +309,7 @@ function settingsPage() {
                 const resp = await fetch(url, { method: 'POST' });
                 const data = await resp.json();
                 if (resp.ok) {
+                    await this.fetchProviderModels(provider);
                     this.showToast(data.message, 'success');
                 } else {
                     this.showToast(data.detail || data.message || '测试失败', 'error');

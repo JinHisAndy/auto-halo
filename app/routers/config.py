@@ -99,6 +99,22 @@ async def get_config():
 
 @router.post("")
 async def save_config(payload: ConfigSaveRequest):
+    if payload.default_model_provider and payload.default_model_name:
+        provider = next(
+            (
+                item
+                for item in payload.providers
+                if item.name and item.name.lower() == payload.default_model_provider
+            ),
+            None,
+        )
+        if not provider:
+            raise HTTPException(status_code=400, detail="Open API default model provider is not configured")
+
+        provider_model_ids = {model.id for model in provider.models}
+        if payload.default_model_name not in provider_model_ids:
+            raise HTTPException(status_code=400, detail="Open API default model must come from loaded provider models")
+
     async with async_session() as db:
         existing = await db.execute(select(SystemConfig))
         existing_keys = {r.key for r in existing.scalars().all()}

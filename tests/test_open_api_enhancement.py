@@ -151,7 +151,14 @@ def test_post_config_persists_open_api_default_model():
         response = client.post(
             "/api/config",
             json={
-                "providers": [],
+                "providers": [
+                    {
+                        "name": "OpenAI",
+                        "api_key": "secret",
+                        "base_url": "https://api.openai.com/v1",
+                        "models": [{"id": "gpt-4.1", "name": "GPT-4.1"}],
+                    }
+                ],
                 "fetch_mode": "http",
                 "open_api_key": None,
                 "default_model_provider": "openai",

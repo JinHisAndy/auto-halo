@@ -1,14 +1,31 @@
-from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+class ProviderModel(BaseModel):
+    id: str
+    name: str = ""
 
 
 class ProviderConfig(BaseModel):
     name: str
     api_key: str
     base_url: str
-    models: list[str] = []
+    models: list[ProviderModel] = []
+
+    @field_validator("models", mode="before")
+    @classmethod
+    def normalize_models(cls, value):
+        if value is None:
+            return []
+        normalized = []
+        for item in value:
+            if isinstance(item, str):
+                normalized.append({"id": item, "name": item})
+            else:
+                normalized.append(item)
+        return normalized
 
 
 class OpenApiKeyItem(BaseModel):

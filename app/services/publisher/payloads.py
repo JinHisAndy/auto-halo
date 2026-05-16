@@ -17,7 +17,7 @@ def build_halo_payload(
     content_html: str,
     publish_time=None,
     slug_suffix: str | None = None,
-    tags: list[dict] | None = None,
+    tags: list | None = None,
 ) -> dict:
     slug = _build_slug(title, slug_suffix=slug_suffix)
     publish = publish_time is None
@@ -51,5 +51,10 @@ def build_halo_payload(
         },
     }
 
-    payload["post"]["spec"]["tags"] = [tag["name"] for tag in (tags or [])]
+    if tags:
+        first = tags[0] if tags else None
+        if isinstance(first, dict):
+            payload["post"]["spec"]["tags"] = [tag["name"] for tag in tags]
+        else:
+            payload["post"]["spec"]["tags"] = list(tags)
     return payload

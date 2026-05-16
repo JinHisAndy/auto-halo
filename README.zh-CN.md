@@ -1,13 +1,16 @@
 # Auto-Halo
 
+[English](README.md)
+
 Auto-Halo 是一个基于 FastAPI 的内容自动化系统，支持：
 
 - 从一个或多个 URL 抓取文章内容
+- 将多 URL 内容通过 AI 整合成一篇统一文章
 - 保留原始 HTML、图片、音视频与附件
-- 将原始资源保存到 MinIO
+- 将原始资源上传保存到 MinIO
 - 使用 AI 对文章标题和正文进行重写
 - 在发布前校验重写后的 HTML
-- 自动生成文章标签
+- 自动生成文章标签并同步到 Halo
 - 发布到 Halo v2.24
 - 同时支持 UI 创建任务和 API 创建任务
 
@@ -17,32 +20,55 @@ Auto-Halo 是一个基于 FastAPI 的内容自动化系统，支持：
 - HTTP 抓取模式
 - Playwright 浏览器渲染抓取模式
 - 图片、音频、视频、附件提取
+- 基于 Content-Type 的文件类型分类（image/video/audio/attachment）
 - 保留原始富文本 HTML 预览
+
+### 多URL 内容整合
+- 单任务内抓取并解析多个 URL 的文章内容
+- 通过 AI 将多篇文章整合成一篇逻辑清晰、层次分明的统一文章
+- 一次重写、一次发布
 
 ### AI 重写
 - 标题与正文一起重写
 - 更偏技术博客风格的提示词
 - 面向 HTML 的重写链路
+- 多来源整合提示词支持
 - 媒体/代码保留校验
 
+### 标签生成与同步
+- 从重写内容中自动提取标签
+- 标签颜色编码（蓝色、靛蓝、青色、翠绿、琥珀、玫瑰）
+- 同步到 Halo v2.24（含 displayName/slug/color 完整映射）
+
 ### 发布能力
-- 发布到 Halo v2.24
+- 通过 Halo 核心 API 发布到 v2.24
 - Halo 重名自动改标题/slug 重试
 - 支持立即发布与定时发布
-- 支持重新发布
+- 支持重新发布 / 从失败阶段重试
 
 ### 任务流转
-- 创建任务
+- 通过 UI 或 API 创建任务
 - WebSocket 实时进度更新
-- 从失败阶段重试
+- 从失败阶段重试（抓取/解析/重写/发布）
 - 基于已保存重写结果重新发布
+- 任务列表分页，支持调整每页条数
 - 区分 UI 创建与 API 创建任务
 
 ### 开放 API
-- 认证接口 `POST /open-api/tasks`
-- 使用单个全局 API Key（`X-API-Key`）
+- 多 Key 支持，含标签和时间戳
+- Key 的增删改查（生成、复制、删除）在设置页操作
+- 认证接口 `POST /open-api/tasks`（`X-API-Key` 请求头）
 - 未传模型时使用全局默认模型
-- 内置接口文档页 `/open-api/docs`
+- 内置 API 文档页 `/open-api/docs`
+- 全部有效 Key 均可通过认证
+
+### 系统配置
+- 多供应商模型配置（OpenAI、DeepSeek、MiniMax、模力方舟、自定义）
+- 预设模板快速配置供应商
+- 按供应商获取并持久化模型列表
+- 模型标签展示与选择
+- 全局默认模型配置（含供应商/模型下拉选择）
+- MinIO、Halo、模型供应商连接测试
 
 ## 技术栈
 
@@ -76,7 +102,7 @@ docker compose up --build
 ## 主要页面
 
 - `/` —— 创建任务
-- `/tasks` —— 任务列表
+- `/tasks` —— 任务列表（含分页）
 - `/settings` —— 系统配置
 - `/open-api/docs` —— 内部 API 文档页
 
@@ -98,6 +124,7 @@ curl -X POST "http://localhost:8808/open-api/tasks" \
 - 先在 `/settings` 中配置 MinIO、Halo、模型供应商、Open API Key 和默认模型
 - 如果使用浏览器抓取模式，请确保已安装 Playwright Chromium
 - 系统使用 SQLite，并会在启动时对已支持的字段变更执行轻量补列
+- 标签会在文章发布前自动同步到 Halo
 
 ## 分支说明
 

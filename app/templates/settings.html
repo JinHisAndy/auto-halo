@@ -24,7 +24,12 @@
                             <button @click="testProviderConnection(provider)" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50" x-text="provider.testing ? '测试中...' : '测试连接'"></button>
                         </div>
                         <div x-show="provider.models.length > 0" class="mt-2">
-                            <select class="w-full border rounded px-3 py-2 text-sm" x-model="provider.selectedModel">
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                <template x-for="m in provider.models" :key="m.id">
+                                    <span class="text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-0.5" x-text="m.name || m.id"></span>
+                                </template>
+                            </div>
+                            <select class="w-full border rounded px-3 py-2 text-sm" x-model="provider.selectedModel" @change="repairDefaultModelSelection()">
                                 <option value="">选择模型</option>
                                 <template x-for="m in provider.models" :key="m.id">
                                     <option :value="m.id" x-text="m.name || m.id"></option>
@@ -49,6 +54,25 @@
                         </template>
                     </div>
                 </div>
+            </div>
+
+            <div class="mt-4 pt-4 border-t border-gray-200">
+                <h3 class="text-md font-semibold mb-3">全局默认模型</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <select class="border rounded px-3 py-2 text-sm" x-model="defaultModelProvider" @change="onDefaultProviderChanged()">
+                        <option value="">选择默认供应商</option>
+                        <template x-for="p in providers.filter(p => p.name)" :key="p.name">
+                            <option :value="p.name.toLowerCase()" x-text="p.name"></option>
+                        </template>
+                    </select>
+                    <select class="border rounded px-3 py-2 text-sm" x-model="defaultModelName" @change="saveSilent()">
+                        <option value="">选择默认模型</option>
+                        <template x-for="m in defaultModelsForSelection()" :key="m.id">
+                            <option :value="m.id" x-text="m.name || m.id"></option>
+                        </template>
+                    </select>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">未指定模型时，Open API 将使用此全局默认模型</p>
             </div>
         </div>
 
@@ -217,14 +241,38 @@ function settingsPage() {
                 this.defaultModelName = '';
                 return;
             }
+            if (provider.name.toLowerCase() !== this.defaultModelProvider) {
+                this.defaultModelProvider = provider.name.toLowerCase();
+            }
             this.syncDefaultModelSelection();
         },
 
         syncDefaultModelSelection() {
-            const models = this.getDefaultProviderModels();
-            if (!models.some(model => model.id === this.defaultModelName)) {
+            const models = this.defaultModelsForSelection();
+            if (!models.some(model => model.id === this.defaultModelName) && models.length > 0) {
+                this.defaultModelName = models[0].id;
+            } else if (models.length === 0) {
                 this.defaultModelName = '';
             }
+        },
+
+        defaultModelsForSelection() {
+            const provider = this.providers.find(
+                p => p.name && p.name.toLowerCase() === this.defaultModelProvider
+            );
+            return provider ? (provider.models || []) : [];
+        },
+
+        onDefaultProviderChanged() {
+            const provider = this.providers.find(
+                p => p.name && p.name.toLowerCase() === this.defaultModelProvider
+            );
+            if (provider && provider.models && provider.models.length > 0) {
+                this.defaultModelName = provider.models[0].id;
+            } else {
+                this.defaultModelName = '';
+            }
+            this.saveSilent();
         },
 
         async fetchProviderModels(provider) {

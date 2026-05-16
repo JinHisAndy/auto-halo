@@ -1,4 +1,5 @@
 import json
+import logging
 
 import httpx
 from slugify import slugify
@@ -7,6 +8,8 @@ from sqlalchemy import select
 from app.models.system_config import SystemConfig
 from app.services.publisher.conflict_resolution import build_retry_title
 from app.services.publisher.payloads import build_halo_payload
+
+logger = logging.getLogger(__name__)
 
 
 class HaloClient:
@@ -36,11 +39,11 @@ class HaloClient:
         return json.loads(row.value)
 
     async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list[dict]) -> list[str]:
-        tag_names = []
+        tag_slugs = []
         for tag_info in tags:
             name = tag_info["name"]
             slug = slugify(name)
-            tag_names.append(name)
+            tag_slugs.append(slug)
 
             check_resp = await client.get(
                 f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
@@ -77,7 +80,7 @@ class HaloClient:
                         "metadata": {"name": slug},
                     }
                 }
-                await client.post(
+                create_resp = await client.post(
                     f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
                     headers={
                         "Authorization": f"Bearer {api_token}",
@@ -85,8 +88,10 @@ class HaloClient:
                     },
                     json=tag_payload,
                 )
+                if not create_resp.is_success:
+                    logger.debug(f"Failed to create tag '{name}': HTTP {create_resp.status_code}")
 
-        return tag_names
+        return tag_slugs
 
     async def test_connection(self, db_session) -> tuple[bool, str]:
         config = await self._load_config(db_session)
@@ -120,8 +125,9 @@ class HaloClient:
         current_title = title
 
         async with httpx.AsyncClient(timeout=30) as client:
+            tag_slugs = tags
             if tags:
-                await self._ensure_tags_exist(client, site_url, api_token, tags)
+                tag_slugs = await self._ensure_tags_exist(client, site_url, api_token, tags)
 
             for attempt in range(0, 6):
                 slug_suffix = None if attempt == 0 else f"retry-{attempt}"
@@ -130,7 +136,7 @@ class HaloClient:
                     content_html,
                     publish_time,
                     slug_suffix=slug_suffix,
-                    tags=tags,
+                    tags=tag_slugs,
                 )
                 slug = payload["post"]["metadata"]["name"]
 

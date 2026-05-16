@@ -12,6 +12,8 @@ from app.services.tagging.service import generate_tags_from_rewritten_content
 
 logger = logging.getLogger(__name__)
 
+MULTI_URL_MERGE_INSTRUCTION = "以下是从多个来源收集的文章内容，请你整合成一篇有逻辑、有层次的统一文章\n\n"
+
 
 class StageExecutionError(Exception):
     def __init__(self, stage: str, original: Exception):
@@ -558,6 +560,7 @@ async def run_pipeline(
         all_parsed_clean_text = []
         first_parsed = None
         minio_path = None
+        all_url_mappings: dict[str, str] = {}
 
         for idx, url in enumerate(urls):
             content = await fetcher_service.fetch(url, mode=mode)
@@ -584,14 +587,13 @@ async def run_pipeline(
 
             _cleanup_local_files(parsed)
 
+            if url_mapping:
+                all_url_mappings.update(url_mapping)
+
             if idx == 0:
                 first_parsed = parsed
                 minio_path = saved_path
-                original_content = parsed.rich_html or content.rich_html or parsed.clean_text
                 title = parsed.title
-                rewrite_source = parsed.rich_html or parsed.clean_text
-                source_validation_html = parsed.rich_html
-                final_url_mapping = url_mapping if url_mapping else None
 
         if not first_parsed:
             raise ValueError("No content could be fetched from any URL")
@@ -599,11 +601,23 @@ async def run_pipeline(
         merged_rich_html = "\n<hr/>\n".join(all_parsed_rich_html)
         merged_clean_text = "\n\n---\n\n".join(all_parsed_clean_text)
 
+        multi_url = len(urls) > 1
+        if multi_url:
+            rewrite_source = MULTI_URL_MERGE_INSTRUCTION + (merged_rich_html or merged_clean_text)
+            source_validation_html = merged_rich_html
+            original_content = merged_rich_html or merged_clean_text
+        else:
+            rewrite_source = first_parsed.rich_html or first_parsed.clean_text
+            source_validation_html = first_parsed.rich_html
+            original_content = first_parsed.rich_html or first_parsed.clean_text
+
+        final_url_mapping = all_url_mappings if all_url_mappings else None
+
         await _update_task(
             task_id,
             status=TaskStatus.rewriting,
             minio_original_path=minio_path,
-            original_content=merged_rich_html or merged_clean_text or original_content,
+            original_content=original_content,
             stage_detail="AI正在重写文章...",
             progress=55,
         )

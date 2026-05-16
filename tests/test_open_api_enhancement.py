@@ -835,3 +835,32 @@ def test_open_api_docs_template_includes_required_usage_examples_and_json_sample
 
     for marker in required_markers:
         assert marker in source, f"Missing docs marker: {marker}"
+
+
+def test_settings_template_has_global_default_model_section():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "全局默认模型" in source
+    assert "onDefaultProviderChanged" in source
+    assert "defaultModelsForSelection" in source
+    assert "Open API 将使用此全局默认模型" in source
+
+
+def test_settings_template_shows_model_chips():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert "flex flex-wrap gap-1 mb-2" in source
+    assert "bg-gray-100 text-gray-700 rounded-full" in source
+
+
+def test_settings_repair_default_model_on_provider_change():
+    source = Path("app/templates/settings.html").read_text(encoding="utf-8")
+    assert '@input="repairDefaultModelSelection()"' in source
+    assert '@change="repairDefaultModelSelection()"' in source
+    assert "this.defaultModelProvider = ''" in source
+    assert "this.defaultModelName = ''" in source
+
+
+def test_settings_default_model_persists_to_open_api_config():
+    source = Path("app/routers/config.py").read_text(encoding="utf-8")
+    assert '"open_api.default_model"' in source
+    assert '"provider": payload.default_model_provider' in source
+    assert '"model": payload.default_model_name' in source

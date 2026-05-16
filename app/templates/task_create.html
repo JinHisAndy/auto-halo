@@ -4,72 +4,84 @@
     <h1 class="text-2xl font-bold mb-6">新建任务</h1>
 
     <div class="bg-white rounded-lg shadow p-6 space-y-5">
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">目标 URL</label>
-            <template x-for="(url, idx) in urls" :key="idx">
-                <div class="flex gap-2 mb-2">
-                    <input type="url" x-model="urls[idx]" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="https://...">
-                    <button @click="removeUrl(idx)" class="text-red-500 hover:text-red-700 px-2" x-show="urls.length > 1">&times;</button>
+        <template x-for="(task, taskIndex) in tasks" :key="task.id">
+            <div class="space-y-5 border border-gray-100 rounded-lg p-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">目标 URL</label>
+                    <template x-for="(url, urlIndex) in task.urls" :key="urlIndex">
+                        <div class="flex gap-2 mb-2">
+                            <input type="url" x-model="task.urls[urlIndex]" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="https://...">
+                            <button @click="removeUrl(taskIndex, urlIndex)" class="text-red-500 hover:text-red-700 px-2" x-show="task.urls.length > 1">&times;</button>
+                        </div>
+                    </template>
+                    <button @click="addUrl(taskIndex)" class="text-sm text-indigo-600 hover:text-indigo-800">+ 添加更多URL</button>
                 </div>
-            </template>
-            <button @click="addUrl" class="text-sm text-indigo-600 hover:text-indigo-800">+ 添加更多URL</button>
-        </div>
 
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">AI 重写配置</label>
-            <div class="grid grid-cols-2 gap-3">
-                <select x-model="provider" @change="fetchModels" class="border rounded px-3 py-2 text-sm">
-                    <option value="">选择供应商</option>
-                    <template x-for="p in providers" :key="p">
-                        <option :value="p" x-text="p"></option>
-                    </template>
-                </select>
-                <select x-model="model" class="border rounded px-3 py-2 text-sm">
-                    <option value="">选择模型</option>
-                    <template x-for="m in models" :key="m.id">
-                        <option :value="m.id" x-text="m.name || m.id"></option>
-                    </template>
-                </select>
-            </div>
-            <label class="flex items-center gap-2 mt-3 text-sm text-gray-600">
-                <input type="checkbox" x-model="keepCitations">
-                保留原文引用
-            </label>
-        </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">AI 重写配置</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <select x-model="task.provider" @change="fetchModels(taskIndex)" class="border rounded px-3 py-2 text-sm">
+                            <option value="">选择供应商</option>
+                            <template x-for="p in providers" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                        <select x-model="task.model" class="border rounded px-3 py-2 text-sm">
+                            <option value="">选择模型</option>
+                            <template x-for="m in task.models" :key="m.id">
+                                <option :value="m.id" x-text="m.name || m.id"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <label class="flex items-center gap-2 mt-3 text-sm text-gray-600">
+                        <input type="checkbox" x-model="task.keepCitations">
+                        保留原文引用
+                    </label>
+                </div>
 
-        <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">发布设置</label>
-            <div class="flex items-center gap-4">
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="radio" x-model="publishType" value="immediate">
-                    立即发布
-                </label>
-                <label class="flex items-center gap-2 text-sm">
-                    <input type="radio" x-model="publishType" value="scheduled">
-                    定时发布
-                </label>
-                <input type="datetime-local" x-model="scheduledAt" x-show="publishType === 'scheduled'" class="border rounded px-3 py-2 text-sm">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">发布设置</label>
+                    <div class="flex items-center gap-4 flex-wrap">
+                        <label class="flex items-center gap-2 text-sm">
+                            <input type="radio" x-model="task.publishType" value="immediate">
+                            立即发布
+                        </label>
+                        <label class="flex items-center gap-2 text-sm">
+                            <input type="radio" x-model="task.publishType" value="scheduled">
+                            定时发布
+                        </label>
+                        <input type="datetime-local" x-model="task.scheduledAt" x-show="task.publishType === 'scheduled'" class="border rounded px-3 py-2 text-sm">
+                        <button @click="addTask()" type="button" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">+</button>
+                    </div>
+                </div>
             </div>
-        </div>
+        </template>
 
         <button @click="submit" class="w-full bg-indigo-600 text-white rounded-lg py-2.5 hover:bg-indigo-700 font-medium" :disabled="submitting">
-            <span x-show="!submitting">创建任务</span>
+            <span x-show="!submitting">开始任务</span>
             <span x-show="submitting">创建中...</span>
         </button>
     </div>
 </div>
 
 <script>
-function taskCreate() {
+function createTaskBlock() {
     return {
+        id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
         urls: [''],
         provider: '',
         model: '',
+        models: [],
         keepCitations: false,
         publishType: 'immediate',
         scheduledAt: '',
+    };
+}
+
+function taskCreate() {
+    return {
+        tasks: [createTaskBlock()],
         providers: [],
-        models: [],
         submitting: false,
 
         async init() {
@@ -77,23 +89,45 @@ function taskCreate() {
             const cfg = await resp.json();
             this.providers = cfg.providers.map(p => p.name.toLowerCase());
             if (this.providers.length > 0) {
-                this.provider = this.providers[0];
-                this.fetchModels();
+                this.tasks.forEach(task => {
+                    task.provider = this.providers[0];
+                });
+                await Promise.all(this.tasks.map((_, index) => this.fetchModels(index)));
             }
         },
 
-        addUrl() { this.urls.push(''); },
-        removeUrl(idx) { this.urls.splice(idx, 1); },
+        addTask() {
+            const task = createTaskBlock();
+            if (this.providers.length > 0) {
+                task.provider = this.providers[0];
+                this.tasks.push(task);
+                this.fetchModels(this.tasks.length - 1);
+                return;
+            }
+            this.tasks.push(task);
+        },
 
-        async fetchModels() {
-            if (!this.provider) return;
-            this.models = [];
-            this.model = '';
+        addUrl(taskIndex) {
+            this.tasks[taskIndex].urls.push('');
+        },
+
+        removeUrl(taskIndex, urlIndex) {
+            this.tasks[taskIndex].urls.splice(urlIndex, 1);
+        },
+
+        async fetchModels(taskIndex) {
+            const task = this.tasks[taskIndex];
+            if (!task || !task.provider) return;
+
+            task.models = [];
+            task.model = '';
             try {
-                const resp = await fetch(`/api/config/models/${this.provider}`, { method: 'POST' });
+                const resp = await fetch(`/api/config/models/${task.provider}`, { method: 'POST' });
                 const data = await resp.json();
-                this.models = data.models || [];
-                if (this.models.length > 0) this.model = this.models[0].id;
+                task.models = data.models || [];
+                if (task.models.length > 0) {
+                    task.model = task.models[0].id;
+                }
             } catch (e) { console.error(e); }
         },
 
@@ -101,14 +135,16 @@ function taskCreate() {
             this.submitting = true;
             try {
                 const payload = {
-                    urls: this.urls.filter(u => u.trim()),
-                    keep_citations: this.keepCitations,
-                    publish_type: this.publishType,
-                    scheduled_at: this.publishType === 'scheduled' ? this.scheduledAt : null,
-                    model_provider: this.provider,
-                    model_name: this.model,
+                    tasks: this.tasks.map(task => ({
+                        urls: task.urls.filter(u => u.trim()),
+                        keep_citations: task.keepCitations,
+                        publish_type: task.publishType,
+                        scheduled_at: task.publishType === 'scheduled' ? task.scheduledAt : null,
+                        model_provider: task.provider,
+                        model_name: task.model,
+                    })),
                 };
-                const resp = await fetch('/api/tasks', {
+                const resp = await fetch('/api/tasks/batch', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload),

@@ -119,3 +119,20 @@ def test_post_tasks_batch_creates_one_task_per_block_and_returns_ids(monkeypatch
     ]
     assert len(captured_calls) == 2
     assert [call["task_id"] for call in captured_calls] == data["task_ids"]
+
+
+def test_task_create_template_uses_independent_task_blocks_and_batch_submit():
+    source = Path("app/templates/task_create.html").read_text(encoding="utf-8")
+
+    assert "tasks: [createTaskBlock()]" in source
+    assert 'x-for="(task, taskIndex) in tasks"' in source
+    assert 'x-model="task.urls[urlIndex]"' in source
+    assert 'x-model="task.provider"' in source
+    assert 'x-model="task.model"' in source
+    assert 'x-model="task.keepCitations"' in source
+    assert 'x-model="task.publishType"' in source
+    assert 'x-model="task.scheduledAt"' in source
+    assert '@click="addTask()"' in source
+    assert "开始任务" in source
+    assert "创建任务" not in source
+    assert "'/api/tasks/batch'" in source or '"/api/tasks/batch"' in source

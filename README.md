@@ -4,8 +4,9 @@
 
 Auto-Halo is a FastAPI-based content automation system that:
 
-- fetches articles from one or more URLs
-- merges multi-URL content into a single unified article via AI
+- creates multiple task blocks in one batch from the UI or API
+- lets each task block fetch articles from one or more URLs
+- merges multi-URL content inside one task block into a single unified article via AI
 - preserves original HTML, images, audio, video, and attachments
 - uploads original assets to MinIO
 - rewrites article title and body with AI
@@ -23,7 +24,13 @@ Auto-Halo is a FastAPI-based content automation system that:
 - content-type based file classification (image/video/audio/attachment)
 - original rich HTML preview retention
 
+### Multi-task batch creation
+- create multiple independent task blocks in one submission from the UI
+- submit the same batch shape through the API
+- each task block runs as its own task record and progress flow
+
 ### Multi-URL content merging
+- each task block can include multiple source URLs
 - fetch and parse content from multiple URLs in a single task
 - merge all fetched articles into one unified piece through AI
 - single rewrite pass, single publish
@@ -38,7 +45,7 @@ Auto-Halo is a FastAPI-based content automation system that:
 ### Tag generation and sync
 - automatic tag extraction from rewritten content
 - tag color coding (blue, indigo, teal, emerald, amber, rose)
-- sync tags to Halo v2.24 with proper displayName/slug/color mapping
+- sync tags to Halo v2.24 with proper displayName/slug/color mapping before post creation
 
 ### Publishing
 - Halo v2.24 publishing via core API
@@ -47,7 +54,7 @@ Auto-Halo is a FastAPI-based content automation system that:
 - republish / retry from failed stage support
 
 ### Task workflow
-- task creation from UI or API
+- batch task creation from UI or API
 - live progress updates via WebSocket
 - retry from failed stage (fetching/parsing/rewriting/publishing)
 - republish using saved rewritten content
@@ -65,9 +72,9 @@ Auto-Halo is a FastAPI-based content automation system that:
 ### Settings
 - multi-provider model configuration (OpenAI, DeepSeek, MiniMax, Mofii, custom)
 - preset templates for quick provider setup
-- fetch model lists per provider with persistence
+- auto-fetch model lists after provider connection tests and persist them per provider
 - model chips display and selection per provider
-- global default model config with provider/model dropdown
+- global default model config with provider/model dropdown for a consistent fallback UX
 - connection testing for MinIO, Halo, and model providers
 
 ## Tech Stack
@@ -124,7 +131,7 @@ curl -X POST "http://localhost:8808/open-api/tasks" \
 - Configure MinIO, Halo, model providers, Open API keys, and default model in `/settings`
 - For browser-mode fetching, make sure Playwright Chromium is installed
 - The system uses SQLite and auto-applies lightweight startup backfills for supported schema additions
-- Tags are automatically synced to Halo before post creation
+- Tags are automatically synced to Halo before post creation, and non-image assets keep content-type based classification behavior
 
 ## Repository Status
 

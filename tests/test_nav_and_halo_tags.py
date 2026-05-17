@@ -64,7 +64,7 @@ def test_build_halo_payload_keeps_tag_slugs_in_post_spec():
     assert payload["post"]["spec"]["tags"] == ["linux", "docker"]
 
 
-def test_halo_client_immediate_publish_creates_post_then_publishes_with_same_name(monkeypatch):
+def test_halo_client_immediate_publish_sets_publish_flag_on_create_without_publish_endpoint(monkeypatch):
     calls = []
 
     class FakeResponse:
@@ -101,7 +101,7 @@ def test_halo_client_immediate_publish_creates_post_then_publishes_with_same_nam
             if url.endswith("/posts"):
                 return FakeResponse(201, {"metadata": {"name": json["post"]["metadata"]["name"]}})
             if url.endswith("/publish"):
-                return FakeResponse(200, {"metadata": {"name": "tagged-title"}})
+                return FakeResponse(404, text="not found")
             raise AssertionError(f"unexpected POST {url}")
 
     async def fake_load_config(self, db_session):
@@ -123,10 +123,67 @@ def test_halo_client_immediate_publish_creates_post_then_publishes_with_same_nam
     assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/posts")] == [
         "https://halo.example/apis/api.console.halo.run/v1alpha1/posts"
     ]
-    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/publish")] == [
-        "https://halo.example/apis/api.console.halo.run/v1alpha1/posts/tagged-title/publish"
+    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/publish")] == []
+
+    create_payload = next(call[3] for call in calls if call[0] == "POST" and call[1].endswith("/posts"))
+    assert create_payload["post"]["spec"]["publish"] is True
+    assert create_payload["post"]["spec"]["tags"] == ["linux"]
+
+
+def test_halo_client_scheduled_publish_keeps_create_payload_unpublished(monkeypatch):
+    calls = []
+
+    class FakeResponse:
+        def __init__(self, status_code: int, payload=None, text: str = ""):
+            self.status_code = status_code
+            self._payload = payload or {}
+            self.text = text
+
+        @property
+        def is_success(self):
+            return 200 <= self.status_code < 300
+
+        def json(self):
+            return self._payload
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            calls.append(("POST", url, None, json))
+            if url.endswith("/posts"):
+                return FakeResponse(201, {"metadata": {"name": json["post"]["metadata"]["name"]}})
+            if url.endswith("/publish"):
+                return FakeResponse(404, text="not found")
+            raise AssertionError(f"unexpected POST {url}")
+
+    async def fake_load_config(self, db_session):
+        return {"site_url": "https://halo.example", "api_token": "token"}
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(HaloClient, "_load_config", fake_load_config)
+
+    post_id = asyncio.run(
+        HaloClient().publish(
+            None,
+            "Scheduled Title",
+            "<p>body</p>",
+            publish_time="2025-01-01T10:00:00Z",
+        )
+    )
+
+    assert post_id == "scheduled-title"
+    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/posts")] == [
+        "https://halo.example/apis/api.console.halo.run/v1alpha1/posts"
     ]
+    assert [call[1] for call in calls if call[0] == "POST" and call[1].endswith("/publish")] == []
 
     create_payload = next(call[3] for call in calls if call[0] == "POST" and call[1].endswith("/posts"))
     assert create_payload["post"]["spec"]["publish"] is False
-    assert create_payload["post"]["spec"]["tags"] == ["linux"]

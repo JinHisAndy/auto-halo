@@ -28,12 +28,6 @@
                                     <span class="text-xs bg-gray-100 text-gray-700 rounded-full px-2 py-0.5" x-text="m.name || m.id"></span>
                                 </template>
                             </div>
-                            <select class="w-full border rounded px-3 py-2 text-sm" x-model="provider.selectedModel" @change="repairDefaultModelSelection()">
-                                <option value="">选择模型</option>
-                                <template x-for="m in provider.models" :key="m.id">
-                                    <option :value="m.id" x-text="m.name || m.id"></option>
-                                </template>
-                            </select>
                             <p class="text-xs text-gray-400 mt-1" x-show="provider.models.length > 0">
                                 模型列表已持久化保存
                             </p>

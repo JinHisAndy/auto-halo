@@ -861,7 +861,6 @@ def test_settings_template_shows_model_chips():
 def test_settings_repair_default_model_on_provider_change():
     source = Path("app/templates/settings.html").read_text(encoding="utf-8")
     assert '@input="repairDefaultModelSelection()"' in source
-    assert '@change="repairDefaultModelSelection()"' in source
     assert "this.defaultModelProvider = ''" in source
     assert "this.defaultModelName = ''" in source
 

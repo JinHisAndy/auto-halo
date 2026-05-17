@@ -40,10 +40,13 @@ class HaloClient:
             return None
         return json.loads(row.value)
 
-    async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list[dict]) -> list[str]:
+    async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list) -> list[str]:
         tag_slugs = []
         for tag_info in tags:
-            name = tag_info["name"]
+            if isinstance(tag_info, dict):
+                name = tag_info.get("name", str(tag_info))
+            else:
+                name = str(tag_info)
             slug = slugify(name)
             tag_slugs.append(slug)
 
@@ -62,7 +65,7 @@ class HaloClient:
                     existing = True
 
             if not existing:
-                color = tag_info.get("color", "blue")
+                color = tag_info.get("color", "blue") if isinstance(tag_info, dict) else "blue"
                 color_map = {
                     "blue": "#3B82F6", "indigo": "#6366F1", "teal": "#14B8A6",
                     "emerald": "#10B981", "amber": "#F59E0B", "rose": "#F43F5E",
@@ -91,7 +94,9 @@ class HaloClient:
                     json=tag_payload,
                 )
                 if not create_resp.is_success:
-                    logger.debug(f"Failed to create tag '{name}': HTTP {create_resp.status_code}")
+                    logger.warning(f"Failed to create tag '{name}': HTTP {create_resp.status_code} {create_resp.text}")
+                else:
+                    logger.info(f"Created Halo tag: {name}")
 
         return tag_slugs
 

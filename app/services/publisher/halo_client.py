@@ -42,61 +42,72 @@ class HaloClient:
 
     async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list) -> list[str]:
         tag_slugs = []
+        all_existing = {}
+
+        list_resp = await client.get(
+            f"{site_url}/apis/tag.halo.run/v1alpha1/tags",
+            headers={"Authorization": f"Bearer {api_token}"},
+        )
+        if list_resp.is_success:
+            for item in list_resp.json().get("items", []):
+                spec = item.get("spec", {})
+                meta = item.get("metadata", {})
+                display = spec.get("displayName", "")
+                name_meta = meta.get("name", "")
+                if display:
+                    all_existing[display] = name_meta
+                if name_meta:
+                    all_existing[name_meta] = name_meta
+
         for tag_info in tags:
             if isinstance(tag_info, dict):
                 name = tag_info.get("name", str(tag_info))
             else:
                 name = str(tag_info)
             slug = slugify(name)
-            tag_slugs.append(slug)
 
-            check_resp = await client.get(
-                f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
-                headers={"Authorization": f"Bearer {api_token}"},
-                params={"keyword": name},
-            )
-            existing = False
-            if check_resp.is_success:
-                items = check_resp.json().get("items", [])
-                found = [item for item in items
-                         if item.get("spec", {}).get("displayName") == name
-                         or item.get("metadata", {}).get("name") == slug]
-                if found:
-                    existing = True
+            if name in all_existing:
+                tag_slugs.append(all_existing[name])
+                logger.info(f"Halo tag already exists: {name} -> {all_existing[name]}")
+                continue
+            if slug in all_existing:
+                tag_slugs.append(all_existing[slug])
+                logger.info(f"Halo tag already exists (by slug): {slug}")
+                continue
 
-            if not existing:
-                color = tag_info.get("color", "blue") if isinstance(tag_info, dict) else "blue"
-                color_map = {
-                    "blue": "#3B82F6", "indigo": "#6366F1", "teal": "#14B8A6",
-                    "emerald": "#10B981", "amber": "#F59E0B", "rose": "#F43F5E",
-                }
-                halo_color = color_map.get(color, "#3B82F6")
+            color = tag_info.get("color", "blue") if isinstance(tag_info, dict) else "blue"
+            color_map = {
+                "blue": "#3B82F6", "indigo": "#6366F1", "teal": "#14B8A6",
+                "emerald": "#10B981", "amber": "#F59E0B", "rose": "#F43F5E",
+            }
+            halo_color = color_map.get(color, "#3B82F6")
 
-                tag_payload = {
-                    "tag": {
-                        "spec": {
-                            "displayName": name,
-                            "slug": slug,
-                            "color": halo_color,
-                            "cover": "",
-                        },
-                        "apiVersion": "tag.halo.run/v1alpha1",
-                        "kind": "Tag",
-                        "metadata": {"name": slug},
-                    }
-                }
-                create_resp = await client.post(
-                    f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
-                    headers={
-                        "Authorization": f"Bearer {api_token}",
-                        "Content-Type": "application/json",
+            tag_payload = {
+                "tag": {
+                    "spec": {
+                        "displayName": name,
+                        "slug": slug,
+                        "color": halo_color,
+                        "cover": "",
                     },
-                    json=tag_payload,
-                )
-                if not create_resp.is_success:
-                    logger.warning(f"Failed to create tag '{name}': HTTP {create_resp.status_code} {create_resp.text}")
-                else:
-                    logger.info(f"Created Halo tag: {name}")
+                    "apiVersion": "tag.halo.run/v1alpha1",
+                    "kind": "Tag",
+                    "metadata": {"name": slug},
+                }
+            }
+            create_resp = await client.post(
+                f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
+                headers={
+                    "Authorization": f"Bearer {api_token}",
+                    "Content-Type": "application/json",
+                },
+                json=tag_payload,
+            )
+            if create_resp.is_success:
+                tag_slugs.append(slug)
+                logger.info(f"Created Halo tag: {name} (slug: {slug})")
+            else:
+                logger.warning(f"Failed to create tag '{name}': HTTP {create_resp.status_code} {create_resp.text}")
 
         return tag_slugs
 

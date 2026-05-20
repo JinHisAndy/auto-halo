@@ -109,17 +109,21 @@ async def create_tasks_batch(payload: TaskBatchCreateRequest, background_tasks: 
 
     from app.services.pipeline import run_pipeline
 
-    for task, task_payload in zip(created_tasks, payload.tasks):
-        background_tasks.add_task(
-            run_pipeline,
-            task_id=task.id,
-            urls=task_payload.urls,
-            provider_key=task_payload.model_provider,
-            model_name=task_payload.model_name,
-            keep_citations=task_payload.keep_citations,
-            publish_type=task_payload.publish_type,
-            scheduled_at=task_payload.scheduled_at.isoformat() if task_payload.scheduled_at else None,
-        )
+    async def _run_pipelines_concurrently():
+        coros = []
+        for task, task_payload in zip(created_tasks, payload.tasks):
+            coros.append(run_pipeline(
+                task_id=task.id,
+                urls=task_payload.urls,
+                provider_key=task_payload.model_provider,
+                model_name=task_payload.model_name,
+                keep_citations=task_payload.keep_citations,
+                publish_type=task_payload.publish_type,
+                scheduled_at=task_payload.scheduled_at.isoformat() if task_payload.scheduled_at else None,
+            ))
+        await asyncio.gather(*coros, return_exceptions=True)
+
+    background_tasks.add_task(_run_pipelines_concurrently)
 
     task_ids = [task.id for task in created_tasks]
     return {"task_ids": task_ids, "count": len(task_ids)}

@@ -20,8 +20,9 @@ class HaloClient:
         content_html: str,
         publish_time=None,
         slug_suffix: str | None = None,
-        tags: list[dict] | None = None,
+        tags: list | None = None,
         publish: bool | None = None,
+        cover: str = "",
     ) -> dict:
         return build_halo_payload(
             title,
@@ -30,6 +31,7 @@ class HaloClient:
             slug_suffix=slug_suffix,
             tags=tags,
             publish=publish,
+            cover=cover,
         )
 
     async def _load_config(self, db_session) -> dict | None:
@@ -44,21 +46,7 @@ class HaloClient:
     async def _ensure_tags_exist(self, client, site_url: str, api_token: str, tags: list) -> list[str]:
         tag_slugs = []
         all_existing = {}
-
-        list_resp = await client.get(
-            f"{site_url}/apis/{HALO_CONTENT_API_VERSION}/tags",
-            headers={"Authorization": f"Bearer {api_token}"},
-        )
-        if list_resp.is_success:
-            for item in list_resp.json().get("items", []):
-                spec = item.get("spec", {})
-                meta = item.get("metadata", {})
-                display = spec.get("displayName", "")
-                name_meta = meta.get("name", "")
-                if display:
-                    all_existing[display] = name_meta
-                if name_meta:
-                    all_existing[name_meta] = name_meta
+        await self._fetch_existing_tags(client, site_url, api_token, all_existing)
 
         for tag_info in tags:
             if isinstance(tag_info, dict):
@@ -110,6 +98,33 @@ class HaloClient:
 
         return tag_slugs
 
+    async def _fetch_existing_tags(self, client, site_url: str, api_token: str, all_existing: dict) -> None:
+        list_resp = await client.get(
+            f"{site_url}/apis/{HALO_CONTENT_API_VERSION}/tags",
+            headers={"Authorization": f"Bearer {api_token}"},
+        )
+        if list_resp.is_success:
+            for item in list_resp.json().get("items", []):
+                spec = item.get("spec", {})
+                meta = item.get("metadata", {})
+                display = spec.get("displayName", "")
+                name_meta = meta.get("name", "")
+                if display:
+                    all_existing[display] = name_meta
+                if name_meta:
+                    all_existing[name_meta] = name_meta
+
+    async def get_existing_tag_display_names(self, db_session) -> list[str]:
+        config = await self._load_config(db_session)
+        if not config:
+            return []
+        site_url = config["site_url"].rstrip("/")
+        api_token = config["api_token"]
+        all_existing = {}
+        async with httpx.AsyncClient(timeout=30) as client:
+            await self._fetch_existing_tags(client, site_url, api_token, all_existing)
+        return sorted(all_existing.keys())
+
     async def test_connection(self, db_session) -> tuple[bool, str]:
         config = await self._load_config(db_session)
         if not config:
@@ -133,6 +148,7 @@ class HaloClient:
         content_html: str,
         publish_time=None,
         tags: list[dict] | None = None,
+        cover: str = "",
     ) -> str:
         config = await self._load_config(db_session)
         site_url = config["site_url"].rstrip("/")
@@ -155,6 +171,7 @@ class HaloClient:
                     slug_suffix=slug_suffix,
                     tags=tag_slugs,
                     publish=True if publish_time is None else None,
+                    cover=cover,
                 )
                 slug = payload["post"]["metadata"]["name"]
 

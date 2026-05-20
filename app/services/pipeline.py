@@ -1,6 +1,7 @@
 import json
 import logging
 from datetime import datetime, timezone
+from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app.db import async_session
@@ -8,7 +9,7 @@ from app.models.task import Task, TaskStatus, PublishType
 from app.models.system_config import SystemConfig
 from app.services.rewriter.prompt_builder import extract_title_and_body
 from app.services.rewriter.validation import validate_rewritten_html
-from app.services.tagging.service import generate_tags_from_rewritten_content
+from app.services.tagging.service import build_tag_records
 
 logger = logging.getLogger(__name__)
 
@@ -86,12 +87,44 @@ async def _load_pipeline_config(provider_key: str) -> tuple[str, dict]:
     return mode, provider_cfg
 
 
+async def _suggest_tags_from_ai(rewriter, rewritten_title: str, rewritten_body: str) -> list[dict]:
+    from app.services.publisher.halo_client import halo_client
+
+    existing_tag_names: list[str] = []
+    try:
+        async with async_session() as db:
+            existing_tag_names = await halo_client.get_existing_tag_display_names(db)
+    except Exception:
+        logger.warning("Failed to fetch existing Halo tags for AI tag suggestion", exc_info=True)
+
+    body_text = BeautifulSoup(rewritten_body or "", "html.parser").get_text(" ", strip=True)
+    suggested_names = await rewriter.suggest_tags(rewritten_title, body_text, existing_tag_names)
+    return build_tag_records(suggested_names)
+
+
 def _cleanup_local_files(parsed):
     import os
 
     for item in parsed.media_items + parsed.attachment_items:
         if item.local_path and os.path.exists(item.local_path):
             os.remove(item.local_path)
+
+
+def _extract_cover_url(html_content: str, url_mapping: dict[str, str] | None = None) -> str:
+    if not html_content:
+        return ""
+    soup = BeautifulSoup(html_content, "html.parser")
+    img = soup.find("img")
+    if not img:
+        return ""
+    src = img.get("src") or ""
+    if not src:
+        return ""
+    if url_mapping:
+        for original_url, minio_url in url_mapping.items():
+            if original_url in src:
+                return minio_url
+    return src
 
 
 async def _publish_or_schedule(
@@ -103,6 +136,7 @@ async def _publish_or_schedule(
     rewritten_title: str,
     rewritten_body: str,
     generated_tags: list[dict] | None = None,
+    cover: str = "",
 ):
     from app.services.publisher.halo_client import halo_client
 
@@ -111,7 +145,7 @@ async def _publish_or_schedule(
         await _broadcast_update(task_id, "publishing", 85, "正在发布到Halo...")
 
         async with async_session() as db:
-            post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)
+            post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags, cover=cover)
 
         await _update_task(
             task_id,
@@ -186,7 +220,11 @@ async def _rewrite_from_source(
         if not ok:
             raise ValueError(message)
 
-        generated_tags = generate_tags_from_rewritten_content(rewritten_title, rewritten_body)
+        generated_tags = await _suggest_tags_from_ai(
+            rewriter=rewriter,
+            rewritten_title=rewritten_title,
+            rewritten_body=rewritten_body,
+        )
 
         await _update_task(
             task_id,
@@ -215,6 +253,7 @@ async def _rewrite_from_source(
             rewritten_title=rewritten_title,
             rewritten_body=rewritten_body,
             generated_tags=generated_tags,
+            cover=cover,
         )
     except Exception as e:
         if isinstance(e, StageExecutionError):
@@ -362,6 +401,7 @@ async def _retry_from_scheduled(
         model_name=model_name,
         rewritten_title=rewritten_title,
         rewritten_body=task.rewritten_content,
+        cover="",
     )
 
 

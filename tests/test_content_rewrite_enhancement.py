@@ -231,8 +231,8 @@ def test_rewritten_html_validator_rejects_heavy_media_loss_even_if_one_image_rem
 def test_pipeline_source_validates_rewritten_html_and_persists_generated_tags():
     source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
     assert "validate_rewritten_html(" in source
-    assert "generate_tags_from_rewritten_content(rewritten_title, rewritten_body)" in source
-    assert "from app.services.tagging.service import generate_tags_from_rewritten_content" in source
+    assert "suggest_tags(rewritten_title, body_text, existing_tag_names)" in source
+    assert "from app.services.tagging.service import build_tag_records" in source
     assert "generated_tags=" in source
 
 
@@ -247,7 +247,7 @@ def test_publish_source_paths_thread_generated_tags_into_halo_publish_calls():
     pipeline_source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
     scheduler_source = Path("app/services/scheduler.py").read_text(encoding="utf-8")
 
-    assert "post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in pipeline_source
+    assert "post_id = await halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags, cover=cover)" in pipeline_source
     assert "post_id = await halo_client.publish(db, task.rewritten_title or task.title, task.rewritten_content, tags=task.generated_tags)" in scheduler_source
 
 

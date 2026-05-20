@@ -291,7 +291,7 @@ def test_pipeline_source_persists_rewritten_title_and_failed_stage():
     assert "extract_title_and_body(" in source
     assert "rewritten_title=" in source
     assert "rewritten_content=" in source
-    assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in source
+    assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in source or "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags, cover=cover)" in source
     assert 'current_stage = "scheduled"' in source
     assert "failed_stage=current_stage" in source
 

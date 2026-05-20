@@ -18,3 +18,7 @@ class BaseRewriter(ABC):
     @abstractmethod
     async def test_connection(self) -> bool:
         ...
+
+    @abstractmethod
+    async def suggest_tags(self, title: str, body_text: str, existing_tags: list[str]) -> list[str]:
+        ...

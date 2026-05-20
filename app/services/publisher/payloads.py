@@ -19,6 +19,7 @@ def build_halo_payload(
     slug_suffix: str | None = None,
     tags: list | None = None,
     publish: bool | None = None,
+    cover: str = "",
 ) -> dict:
     slug = _build_slug(title, slug_suffix=slug_suffix)
     should_publish = publish_time is None if publish is None else publish
@@ -29,7 +30,7 @@ def build_halo_payload(
                 "title": title,
                 "slug": slug,
                 "template": "",
-                "cover": "",
+                "cover": cover,
                 "deleted": False,
                 "publish": should_publish,
                 "pinned": False,

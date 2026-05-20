@@ -123,7 +123,7 @@ def test_pipeline_prefers_rich_html_for_rewrite_and_publish_paths():
     pipeline_source = (Path(__file__).resolve().parents[1] / "app" / "services" / "pipeline.py").read_text(encoding="utf-8")
 
     assert "rewriter.rewrite(parsed.rich_html" in pipeline_source or "rewriter.rewrite(rewrite_source" in pipeline_source
-    assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags)" in pipeline_source
+    assert "halo_client.publish(db, rewritten_title, rewritten_body, tags=generated_tags, cover=cover)" in pipeline_source
     assert "parsed.clean_text" in pipeline_source
 
 

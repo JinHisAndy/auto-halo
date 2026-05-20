@@ -68,3 +68,26 @@ def extract_title_and_body(output: str, fallback_title: str) -> tuple[str, str]:
     title_part, body_part = output.split("BODY:", 1)
     title = title_part.replace("TITLE:", "", 1).strip() or fallback_title
     return title, body_part.strip()
+
+
+TAG_SUGGESTION_PROMPT = """
+你是一位博客标签专家。请根据文章内容，从给定标签列表中选出最贴切的标签，并补充必要的新标签。
+
+要求：
+- 优先复用已有标签中与文章内容真正相关的标签
+- 不要为了凑数而选择不相关的标签
+- 如果已有标签不够贴切，生成具有实际含义的新标签
+- 标签要从博客读者的角度出发，便于读者快速索引和检索文章
+- 标签要简洁、有实际含义（例如"Kubernetes"而不是"技术"）
+- 数量控制在 3~6 个
+- 只输出标签名，一行一个，不要加序号或解释
+
+已有标签列表：
+{existing_tags}
+
+文章标题：{title}
+文章正文摘要：
+{body_text}
+
+请输出选中的标签（每行一个）：
+"""

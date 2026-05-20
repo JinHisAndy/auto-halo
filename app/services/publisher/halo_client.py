@@ -84,17 +84,15 @@ class HaloClient:
             halo_color = color_map.get(color, "#3B82F6")
 
             tag_payload = {
-                "tag": {
-                    "spec": {
-                        "displayName": name,
-                        "slug": slug,
-                        "color": halo_color,
-                        "cover": "",
-                    },
-                    "apiVersion": HALO_CONTENT_API_VERSION,
-                    "kind": "Tag",
-                    "metadata": {"name": slug},
-                }
+                "spec": {
+                    "displayName": name,
+                    "slug": slug,
+                    "color": halo_color,
+                    "cover": "",
+                },
+                "apiVersion": HALO_CONTENT_API_VERSION,
+                "kind": "Tag",
+                "metadata": {"name": slug},
             }
             create_resp = await client.post(
                 f"{site_url}/apis/{HALO_CONTENT_API_VERSION}/tags",

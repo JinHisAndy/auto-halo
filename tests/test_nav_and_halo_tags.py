@@ -97,7 +97,7 @@ def test_halo_client_immediate_publish_sets_publish_flag_on_create_without_publi
         async def post(self, url, headers=None, json=None):
             calls.append(("POST", url, None, json))
             if url.endswith("/tags"):
-                return FakeResponse(201, {"metadata": {"name": json["tag"]["metadata"]["name"]}})
+                return FakeResponse(201, {"metadata": {"name": json["metadata"]["name"]}})
             if url.endswith("/posts"):
                 return FakeResponse(201, {"metadata": {"name": json["post"]["metadata"]["name"]}})
             if url.endswith("/publish"):
@@ -165,7 +165,7 @@ def test_halo_client_uses_content_api_group_for_tag_list_and_create(monkeypatch)
         async def post(self, url, headers=None, json=None):
             calls.append(("POST", url, None, json))
             if url.endswith("/tags"):
-                return FakeResponse(201, {"metadata": {"name": json["tag"]["metadata"]["name"]}})
+                return FakeResponse(201, {"metadata": {"name": json["metadata"]["name"]}})
             if url.endswith("/posts"):
                 return FakeResponse(201, {"metadata": {"name": json["post"]["metadata"]["name"]}})
             raise AssertionError(f"unexpected POST {url}")
@@ -190,7 +190,7 @@ def test_halo_client_uses_content_api_group_for_tag_list_and_create(monkeypatch)
 
     assert tag_get[1] == "https://halo.example/apis/content.halo.run/v1alpha1/tags"
     assert tag_post[1] == "https://halo.example/apis/content.halo.run/v1alpha1/tags"
-    assert tag_post[3]["tag"]["apiVersion"] == "content.halo.run/v1alpha1"
+    assert tag_post[3]["apiVersion"] == "content.halo.run/v1alpha1"
 
 
 def test_halo_client_scheduled_publish_keeps_create_payload_unpublished(monkeypatch):

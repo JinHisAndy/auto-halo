@@ -142,7 +142,7 @@ def test_halo_client_ensures_tags_exist_before_publish():
 
     assert "async def _ensure_tags_exist(" in source
     assert "_ensure_tags_exist(client, site_url, api_token, tags)" in source
-    assert "tag.halo.run/v1alpha1" in source
+    assert 'HALO_CONTENT_API_VERSION = "content.halo.run/v1alpha1"' in source
     assert "displayName" in source
     assert '"kind": "Tag"' in source
 

@@ -10,6 +10,7 @@ from app.services.publisher.conflict_resolution import build_retry_title
 from app.services.publisher.payloads import build_halo_payload
 
 logger = logging.getLogger(__name__)
+HALO_CONTENT_API_VERSION = "content.halo.run/v1alpha1"
 
 
 class HaloClient:
@@ -45,7 +46,7 @@ class HaloClient:
         all_existing = {}
 
         list_resp = await client.get(
-            f"{site_url}/apis/tag.halo.run/v1alpha1/tags",
+            f"{site_url}/apis/{HALO_CONTENT_API_VERSION}/tags",
             headers={"Authorization": f"Bearer {api_token}"},
         )
         if list_resp.is_success:
@@ -90,13 +91,13 @@ class HaloClient:
                         "color": halo_color,
                         "cover": "",
                     },
-                    "apiVersion": "tag.halo.run/v1alpha1",
+                    "apiVersion": HALO_CONTENT_API_VERSION,
                     "kind": "Tag",
                     "metadata": {"name": slug},
                 }
             }
             create_resp = await client.post(
-                f"{site_url}/apis/api.console.halo.run/v1alpha1/tags",
+                f"{site_url}/apis/{HALO_CONTENT_API_VERSION}/tags",
                 headers={
                     "Authorization": f"Bearer {api_token}",
                     "Content-Type": "application/json",

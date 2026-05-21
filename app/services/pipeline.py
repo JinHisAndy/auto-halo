@@ -226,6 +226,8 @@ async def _rewrite_from_source(
             rewritten_body=rewritten_body,
         )
 
+        cover = _extract_cover_url(rewritten_body, url_mapping)
+
         await _update_task(
             task_id,
             rewritten_title=rewritten_title,

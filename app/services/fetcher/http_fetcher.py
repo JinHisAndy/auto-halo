@@ -12,11 +12,12 @@ def _process_summary_html(summary_html: str, base_url: str) -> str:
     soup = BeautifulSoup(summary_html, "lxml")
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
         tag.decompose()
-    allowed = {"img": ["src", "data-src", "data-original", "alt", "width", "height"],
+    allowed = {"img": ["src", "data-src", "data-original", "data-type", "alt", "width", "height", "class", "style"],
                "a": ["href"], "blockquote": [], "pre": [], "code": [], "table": [], "tr": [], "td": [], "th": [],
                "ul": [], "ol": [], "li": [], "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": [],
                "p": [], "br": [], "b": [], "strong": [], "i": [], "em": [], "u": [], "span": [], "div": [],
-               "video": ["src"], "audio": ["src"], "source": ["src"]}
+               "section": [], "figure": [], "figcaption": [],
+               "video": ["src", "controls"], "audio": ["src", "controls"], "source": ["src"]}
     for tag in soup.find_all(True):
         if tag.name not in allowed:
             tag.unwrap()
@@ -71,9 +72,9 @@ def _extract_media_urls(html: str, base_url: str) -> list[str]:
     urls = set()
 
     for tag in soup.find_all("img"):
-        src = tag.get("src") or tag.get("data-src") or tag.get("data-original") or tag.get("data-url") or tag.get("data-lazy-src")
+        src = tag.get("data-src") or tag.get("data-original") or tag.get("data-url") or tag.get("data-lazy-src") or tag.get("src")
         if src:
-            full = urljoin(base_url, src)
+            full = urljoin(base_url, src.split("#")[0])
             if not full.startswith("data:"):
                 urls.add(full)
 

@@ -88,12 +88,16 @@ class ParserService:
         attachment_items = []
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://mp.weixin.qq.com/",
         }
         async with httpx.AsyncClient(timeout=60, follow_redirects=True, headers=headers) as client:
             for idx, url in enumerate(content.media_urls):
                 try:
-                    resp = await client.get(url)
+                    req_headers = dict(headers)
+                    if "mmbiz.qpic.cn" in url or "mp.weixin.qq.com" in url:
+                        req_headers["Referer"] = "https://mp.weixin.qq.com/"
+                    resp = await client.get(url, headers=req_headers)
                     resp.raise_for_status()
                     content_type = resp.headers.get("content-type", "")
                     file_type, ext = self._classify_content_type(content_type)

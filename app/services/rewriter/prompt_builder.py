@@ -1,3 +1,5 @@
+import re
+
 HTML_REWRITE_PROMPT = """
 作为一个常年写技术博客的人，请帮我重写下面这篇 HTML 格式的技术文章，面向开发者和工程师读者。
 
@@ -67,6 +69,8 @@ def extract_title_and_body(output: str, fallback_title: str) -> tuple[str, str]:
 
     title_part, body_part = output.split("BODY:", 1)
     title = title_part.replace("TITLE:", "", 1).strip() or fallback_title
+    title = title.split("\n")[0][:200].strip()
+    title = re.sub(r'[<>:"/\\|?*\n\r\t]', "_", title).strip("_")
     return title, body_part.strip()
 
 

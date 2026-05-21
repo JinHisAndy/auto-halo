@@ -1,10 +1,14 @@
 import io
 import json
+import os
+import shutil
 from pathlib import Path
 
 from minio import Minio
 
 from app.models.system_config import SystemConfig
+
+LOCAL_HISTORY_DIR = os.path.join(os.getcwd(), "history")
 
 
 class MinioStorage:
@@ -57,11 +61,33 @@ class MinioStorage:
         self, db_session, article_title: str, html_raw: str, parsed_article
     ) -> tuple[str, dict[str, str]]:
         config = await self._load_config(db_session)
-        client = self._get_client(config)
-        bucket = config["bucket"]
-
         folder = f"{article_title}/"
         url_mapping: dict[str, str] = {}
+
+        if config is None:
+            local_folder = os.path.join(LOCAL_HISTORY_DIR, article_title)
+            os.makedirs(os.path.join(local_folder, "media"), exist_ok=True)
+            os.makedirs(os.path.join(local_folder, "attachments"), exist_ok=True)
+
+            with open(os.path.join(local_folder, "original.html"), "w", encoding="utf-8") as f:
+                f.write(html_raw)
+
+            for item in parsed_article.media_items:
+                if item.local_path and os.path.exists(item.local_path):
+                    dest = os.path.join(local_folder, "media", item.filename)
+                    shutil.copy2(item.local_path, dest)
+                    url_mapping[item.url] = item.url
+
+            for item in parsed_article.attachment_items:
+                if item.local_path and os.path.exists(item.local_path):
+                    dest = os.path.join(local_folder, "attachments", item.filename)
+                    shutil.copy2(item.local_path, dest)
+                    url_mapping[item.url] = item.url
+
+            return folder, url_mapping
+
+        client = self._get_client(config)
+        bucket = config["bucket"]
 
         client.put_object(
             bucket,
@@ -111,10 +137,19 @@ class MinioStorage:
 
     async def save_rewritten(self, db_session, article_title: str, markdown_content: str) -> str:
         config = await self._load_config(db_session)
+        folder = f"{article_title}/"
+
+        if config is None:
+            local_folder = os.path.join(LOCAL_HISTORY_DIR, article_title)
+            os.makedirs(local_folder, exist_ok=True)
+            path = os.path.join(local_folder, "rewritten.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(markdown_content)
+            return os.path.join(folder, "rewritten.md")
+
         client = self._get_client(config)
         bucket = config["bucket"]
 
-        folder = f"{article_title}/"
         path = f"{folder}rewritten.md"
         data = markdown_content.encode("utf-8")
         client.put_object(

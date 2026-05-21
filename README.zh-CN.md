@@ -1,119 +1,128 @@
 # Auto-Halo
 
-[English](README.md)
+[中文文档](README.md)
 
-Auto-Halo 是一个基于 FastAPI 的内容自动化系统，支持：
+Auto-Halo is a FastAPI-based content automation system that:
 
-- 通过 UI 或 API 一次创建多个任务块的批量任务
-- 每个任务块可从一个或多个 URL 抓取文章内容
-- 将单个任务块中的多 URL 内容通过 AI 整合成一篇统一文章
-- 保留原始 HTML、图片、音视频与附件
-- 将原始资源上传保存到 MinIO
-- 使用 AI 对文章标题和正文进行重写
-- 在发布前校验重写后的 HTML
-- 自动生成文章标签并同步到 Halo
-- 发布到 Halo v2.24
-- 同时支持 UI 创建任务和 API 创建任务
+- creates multiple task blocks in one batch from the UI or API
+- lets each task block fetch articles from one or more URLs
+- merges multi-URL content inside one task block into a single unified article via AI
+- preserves original HTML, images, audio, video, and attachments
+- uploads original assets to MinIO (optional, falls back to local `history/` directory)
+- rewrites article title and body with AI
+- validates rewritten HTML before publishing
+- AI semantic tag matching with existing Halo tags or generates new meaningful tags
+- automatically extracts article cover image and syncs to Halo
+- publishes the final result to Halo v2.24
+- supports both UI-driven and API-driven task creation
 
-## 功能特性
+## Features
 
-### 内容抓取
-- HTTP 抓取模式
-- Playwright 浏览器渲染抓取模式
-- 图片、音频、视频、附件提取
-- 基于 Content-Type 的文件类型分类（image/video/audio/attachment）
-- 保留原始富文本 HTML 预览
+### Content acquisition
+- HTTP fetch mode
+- Playwright browser-render mode
+- media extraction for images, audio, video, and attachments
+- content-type based file classification (image/video/audio/attachment)
+- original rich HTML preview retention
 
-### 多任务批量创建
-- 支持在 UI 中一次提交多个彼此独立的任务块
-- API 也支持提交同样的批量任务结构
-- 每个任务块都会作为独立任务记录执行完整流程
+### Multi-task batch creation
+- create multiple independent task blocks in one submission from the UI
+- submit the same batch shape through the API
+- tasks run concurrently without blocking each other
+- each task block runs as its own task record and progress flow
 
-### 多URL 内容整合
-- 每个任务块都可以包含多个来源 URL
-- 单任务内抓取并解析多个 URL 的文章内容
-- 通过 AI 将多篇文章整合成一篇逻辑清晰、层次分明的统一文章
-- 一次重写、一次发布
+### Multi-URL content merging
+- each task block can include multiple source URLs
+- fetch and parse content from multiple URLs in a single task
+- merge all fetched articles into one unified piece through AI
+- single rewrite pass, single publish
 
-### AI 重写
-- 标题与正文一起重写
-- 更偏技术博客风格的提示词
-- 面向 HTML 的重写链路
-- 多来源整合提示词支持
-- 媒体/代码保留校验
+### AI rewriting
+- rewritten title + rewritten body
+- technical-blog oriented prompt style
+- HTML-aware rewrite flow
+- multi-source merge prompt support
+- media/code preservation validation
 
-### 标签生成与同步
-- 从重写内容中自动提取标签
-- 标签颜色编码（蓝色、靛蓝、青色、翠绿、琥珀、玫瑰）
-- 在创建文章前同步到 Halo v2.24（含 displayName/slug/color 完整映射）
+### Tag generation and sync
+- AI semantic matching: fetch existing Halo tags first, AI judges which to reuse
+- generates meaningful new tags from a blog reader's perspective when needed
+- tag color coding
+- sync tags to Halo v2.24 with proper displayName/slug/color mapping
 
-### 发布能力
-- 通过 Halo 核心 API 发布到 v2.24
-- Halo 重名自动改标题/slug 重试
-- 支持立即发布与定时发布
-- 支持重新发布 / 从失败阶段重试
+### Publishing
+- Halo v2.24 publishing via core API
+- duplicate-name auto-retry with renamed titles/slugs
+- immediate publish or scheduled publish
+- automatic cover image extraction (first image from article)
+- one-click retry from failed stage for failed tasks
 
-### 任务流转
-- 通过 UI 或 API 批量创建任务
-- WebSocket 实时进度更新
-- 从失败阶段重试（抓取/解析/重写/发布）
-- 基于已保存重写结果重新发布
-- 任务列表分页，支持调整每页条数
-- 区分 UI 创建与 API 创建任务
+### Task workflow
+- batch task creation from UI or API
+- live progress updates via WebSocket
+- retry from failed stage (fetching/parsing/rewriting/publishing)
+- paginated task list with adjustable page size
+- distinguish UI-created vs API-created tasks
 
-### 开放 API
-- 多 Key 支持，含标签和时间戳
-- Key 的增删改查（生成、复制、删除）在设置页操作
-- 认证接口 `POST /open-api/tasks`（`X-API-Key` 请求头）
-- 未传模型时使用全局默认模型
-- 内置 API 文档页 `/open-api/docs`
-- 全部有效 Key 均可通过认证
+### Storage options
+- configurable MinIO object storage (recommended)
+- automatic fallback to local `history/` directory when MinIO is not configured
+- preserves original image/audio/video URLs when MinIO is unavailable
 
-### 系统配置
-- 多供应商模型配置（OpenAI、DeepSeek、MiniMax、模力方舟、自定义）
-- 预设模板快速配置供应商
-- 在供应商连接测试成功后自动拉取并持久化模型列表
-- 模型标签展示与选择
-- 全局默认模型配置（含供应商/模型下拉选择），提供统一默认模型体验
-- MinIO、Halo、模型供应商连接测试
+### Open API
+- multi-key support with labels and timestamps
+- key CRUD (generate, copy, preview, delete) from settings UI
+- authenticated `POST /open-api/tasks` with `X-API-Key` header
+- global default model fallback when request omits model selection
+- built-in API documentation page at `/open-api/docs`
+- any valid key from the key list is accepted
 
-## 技术栈
+### Settings
+- multi-provider model configuration (OpenAI, DeepSeek, MiniMax, Mofii, custom)
+- preset templates for quick provider setup
+- auto-fetch model lists after provider connection tests and persist them per provider
+- model chips display
+- global default model config with provider/model dropdown for a consistent fallback UX
+- connection testing for MinIO, Halo, and model providers
+- MinIO configuration is optional
+
+## Tech Stack
 
 - Python 3.11+
 - FastAPI
 - SQLAlchemy + SQLite
-- Jinja2 + Alpine.js + Tailwind CSS（CDN）
-- MinIO
+- Jinja2 + Alpine.js + Tailwind CSS (CDN)
+- MinIO (optional)
 - Playwright
 - Halo v2.24
 
-## 本地运行
+## Run Locally
 
 ```bash
 pip install -r requirements.txt
 python run.py
 ```
 
-默认访问地址：
+Default URL:
 
 ```text
 http://localhost:8808
 ```
 
-## Docker 运行
+## Docker
 
 ```bash
 docker compose up --build
 ```
 
-## 主要页面
+## Main Pages
 
-- `/` —— 创建任务
-- `/tasks` —— 任务列表（含分页）
-- `/settings` —— 系统配置
-- `/open-api/docs` —— 内部 API 文档页
+- `/` — task creation (supports multi-block batch creation)
+- `/tasks` — task list (with pagination, progress bars, preview)
+- `/settings` — system configuration
+- `/open-api/docs` — internal API documentation page
 
-## Open API 示例
+## Open API Example
 
 ```bash
 curl -X POST "http://localhost:8808/open-api/tasks" \
@@ -126,13 +135,14 @@ curl -X POST "http://localhost:8808/open-api/tasks" \
   }'
 ```
 
-## 使用说明
+## Notes
 
-- 先在 `/settings` 中配置 MinIO、Halo、模型供应商、Open API Key 和默认模型
-- 如果使用浏览器抓取模式，请确保已安装 Playwright Chromium
-- 系统使用 SQLite，并会在启动时对已支持的字段变更执行轻量补列
-- 标签会在文章发布前自动同步到 Halo，非图片资源会继续按 Content-Type 进行分类处理
+- Configure model providers, Halo, Open API keys, and default model in `/settings`
+- MinIO is optional — if not configured, local `history/` directory is used instead
+- For browser-mode fetching, make sure Playwright Chromium is installed
+- The system uses SQLite and auto-applies lightweight startup backfills for supported schema additions
+- Tags are automatically synced to Halo before post creation (AI semantic matching with existing tags)
 
-## 分支说明
+## Repository Status
 
-当前仓库使用 `master` 作为默认工作分支。
+This repository currently uses `master` as the active default branch.

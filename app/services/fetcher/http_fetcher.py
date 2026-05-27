@@ -184,7 +184,49 @@ def _process_summary_html(summary_html: str, base_url: str) -> str:
 def _extract_wechat_rich_html(html: str, url: str) -> str:
     body_html = _extract_body_html(html, url)
     rich_html = _process_summary_html(body_html, url)
+    rich_html = _resolve_wechat_video_sources(rich_html, html)
     return _backfill_wechat_image_dimensions(rich_html, html)
+
+
+def _resolve_wechat_video_sources(rich_html: str, html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    script_text = "\n".join(tag.get_text("\n", strip=False) for tag in soup.find_all("script"))
+    vid_urls: dict[str, str] = {}
+    for m in re.finditer(r'video_id\s*[:=]\s*["\'](wxv_\d+)["\'].*?mp_video_trans_info\s*[:=]\s*\[(.*?)\]\s*[,;]', script_text, re.IGNORECASE | re.DOTALL):
+        vid = m.group(1)
+        trans_block = m.group(2)
+        url_match = re.search(r'url\s*[:=]\s*["\']?(?:\(\s*["\'])?((?:https?:)?//mpvideo\.qpic\.cn/[^\'"<>{}()\s]+\.mp4[^\'"<>{}()\s]*)["\']?\)?', trans_block, re.IGNORECASE)
+        if url_match:
+            vid_urls[vid] = url_match.group(1)
+
+    if not vid_urls:
+        return rich_html
+
+    soup = BeautifulSoup(rich_html, "lxml")
+    for iframe in soup.find_all("iframe"):
+        src = iframe.get("data-src") or iframe.get("src") or ""
+        vid = iframe.get("data-mpvid") or ""
+        if not vid:
+            vid_match = re.search(r'vid=([^&\s"\']+)', src)
+            if vid_match:
+                vid = vid_match.group(1)
+        if vid in vid_urls:
+            mp4_url = vid_urls[vid]
+            if not mp4_url.startswith("http"):
+                mp4_url = "https:" + mp4_url
+            video_tag = soup.new_tag("video")
+            video_tag["src"] = mp4_url
+            video_tag["controls"] = ""
+            w = iframe.get("width") or ""
+            h = iframe.get("height") or ""
+            if w:
+                video_tag["width"] = w
+            if h:
+                video_tag["height"] = h
+            iframe.replace_with(video_tag)
+
+    body = soup.find("body") or soup
+    return str(body)
 
 
 def _has_meaningful_wechat_content(html: str) -> bool:
@@ -324,6 +366,9 @@ def _extract_media_urls(html: str, base_url: str) -> list[str]:
         script_text = "\n".join(tag.get_text("\n", strip=False) for tag in soup.find_all("script"))
         for cdn_url in re.findall(r'cdn_url\s*[:=]\s*["\'](https://mmbiz\.qpic\.cn/[^"\']+)["\']', script_text, re.IGNORECASE):
             urls.add(cdn_url.split("#")[0])
+        for video_url in re.findall(r'(?:https?:)?//mpvideo\.qpic\.cn/[^\'"<>\s]+\.mp4[^\'"<>\s]*', script_text, re.IGNORECASE):
+            full = video_url if video_url.startswith("http") else "https:" + video_url
+            urls.add(full.split("#")[0])
 
     background_re = re.compile(r"url\(\s*['\"]?\s*(.*?)\s*['\"]?\s*\)", re.IGNORECASE)
     for tag in soup.find_all(style=True):

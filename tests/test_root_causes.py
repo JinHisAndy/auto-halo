@@ -243,6 +243,50 @@ def test_wechat_media_url_extraction_falls_back_to_picture_page_info_list():
     assert "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg" in urls
 
 
+def test_wechat_media_url_extraction_reads_mp4_urls_from_video_page_infos():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    mp4_url = "http://mpvideo.qpic.cn/0b2eabc.f10002.mp4?dis_k=abc"
+    html = '''
+    <html><body>
+      <div id="js_content"><p>article with embedded iframe video</p></div>
+      <script>
+        var videoPageInfos = [{
+          mp_video_trans_info: [
+            { url: "''' + mp4_url + '''", width: "1704", height: "1080" }
+          ],
+        }];
+      </script>
+    </body></html>
+    '''
+
+    urls = _extract_media_urls(html, "https://mp.weixin.qq.com/s/example")
+
+    assert mp4_url in urls
+
+
+def test_non_wechat_media_url_extraction_ignores_video_page_infos():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    html = '''
+    <html><body>
+      <img src="https://example.com/image.jpg" />
+      <script>
+        var videoPageInfos = [{
+          mp_video_trans_info: [
+            { url: "http://mpvideo.qpic.cn/0b2eabc.f10002.mp4?dis_k=abc" }
+          ],
+        }];
+      </script>
+    </body></html>
+    '''
+
+    urls = _extract_media_urls(html, "https://example.com/post")
+
+    assert "https://example.com/image.jpg" in urls
+    assert "mpvideo.qpic.cn" not in " ".join(urls)
+
+
 def test_non_wechat_media_url_extraction_does_not_use_picture_page_info_list():
     from app.services.fetcher.http_fetcher import _extract_media_urls
 

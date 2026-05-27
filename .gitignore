@@ -9,3 +9,4 @@ auto-halo - 副本/
 *.egg-info/
 dist/
 build/
+docs/superpowers/

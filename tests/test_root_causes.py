@@ -263,6 +263,59 @@ def test_non_wechat_media_url_extraction_does_not_use_picture_page_info_list():
     assert "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg" not in urls
 
 
+def test_wechat_rich_html_preserves_image_metadata_attributes():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _extract_wechat_rich_html
+
+    html = '''
+    <div id="js_content">
+      <section style="text-align:center;">
+        <img
+          data-src="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+          data-ratio="0.5"
+          data-w="1080"
+          data-s="300,640"
+          data-imgfileid="100000385"
+          data-type="png"
+          data-croporisrc="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/0?wx_fmt=png&from=appmsg"
+          data-cropx2="1849"
+          data-cropy1="16.4"
+          data-cropy2="769.8"
+          type="block"
+        />
+      </section>
+    </div>
+    '''
+
+    rich_html = _extract_wechat_rich_html(html, "https://mp.weixin.qq.com/s/example")
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("data-ratio") == "0.5"
+    assert img.get("data-w") == "1080"
+    assert img.get("data-s") == "300,640"
+    assert img.get("data-imgfileid") == "100000385"
+    assert img.get("data-croporisrc") is not None
+    assert img.get("data-cropx2") == "1849"
+    assert img.get("data-cropy1") == "16.4"
+    assert img.get("data-cropy2") == "769.8"
+    assert img.get("type") == "block"
+
+
+def test_non_wechat_summary_html_does_not_gain_wechat_only_attributes():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _process_summary_html
+
+    rich_html = _process_summary_html(
+        '<article><img src="https://example.com/image.png" data-ratio="0.5" data-imgfileid="123" /></article>',
+        "https://example.com/post",
+    )
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("src") == "https://example.com/image.png"
+
+
 def test_fetch_http_prefers_wechat_dom_rich_html_when_extractor_drops_images(monkeypatch):
     from app.services.fetcher import http_fetcher
 

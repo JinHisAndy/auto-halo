@@ -44,7 +44,11 @@ def _process_summary_html(summary_html: str, base_url: str) -> str:
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
         tag.decompose()
     allowed = {
-        "img": ["src", "data-src", "data-original", "data-type", "alt", "width", "height", "class", "style"],
+        "img": [
+            "src", "data-src", "data-original", "data-type", "alt", "width", "height", "class", "style",
+            "data-ratio", "data-w", "data-s", "data-imgfileid",
+            "data-croporisrc", "data-cropx2", "data-cropy1", "data-cropy2", "type",
+        ],
         "a": ["href"],
         "blockquote": [], "pre": [], "code": [], "table": [], "tr": [], "td": [], "th": [],
         "ul": [], "ol": [], "li": [], "h1": [], "h2": [], "h3": [], "h4": [], "h5": [], "h6": [],

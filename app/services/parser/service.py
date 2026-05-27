@@ -136,17 +136,18 @@ class ParserService:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
             "Referer": "https://mp.weixin.qq.com/",
         }
-        async with httpx.AsyncClient(timeout=60, follow_redirects=True, headers=headers) as client:
+        article_referer = content.source_url or headers["Referer"]
+        async with httpx.AsyncClient(timeout=120, follow_redirects=True, headers=headers) as client:
             for idx, url in enumerate(content.media_urls):
                 try:
                     req_headers = dict(headers)
                     if self._looks_like_wechat_image_cdn(url):
-                        req_headers["Referer"] = "https://mp.weixin.qq.com/"
+                        req_headers["Referer"] = article_referer
                         req_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                     elif "mp.weixin.qq.com" in url:
-                        req_headers["Referer"] = "https://mp.weixin.qq.com/"
+                        req_headers["Referer"] = article_referer
                     elif "res.wx.qq.com" in url:
-                        req_headers["Referer"] = "https://mp.weixin.qq.com/"
+                        req_headers["Referer"] = article_referer
                     resp = await client.get(url, headers=req_headers)
                     resp.raise_for_status()
                     content_type = resp.headers.get("content-type", "")

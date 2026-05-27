@@ -66,4 +66,5 @@ async def fetch_browser(url: str) -> FetchedContent:
         text_content=text_content,
         rich_html=rich_html,
         media_urls=media_urls,
+        source_url=url,
     )

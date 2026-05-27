@@ -8,3 +8,4 @@ class FetchedContent:
     text_content: str
     rich_html: str = ""
     media_urls: list[str] = field(default_factory=list)
+    source_url: str = ""

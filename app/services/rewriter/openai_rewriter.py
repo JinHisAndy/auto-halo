@@ -20,7 +20,7 @@ class OpenAIRewriter(BaseRewriter):
     async def rewrite(self, text: str, keep_citations: bool = False) -> str:
         prompt = build_rewrite_prompt(text, keep_citations)
 
-        async with httpx.AsyncClient(timeout=600) as client:
+        async with httpx.AsyncClient(timeout=900) as client:
             resp = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={
@@ -52,7 +52,7 @@ class OpenAIRewriter(BaseRewriter):
             title=title,
             body_text=body_text[:3000],
         )
-        async with httpx.AsyncClient(timeout=600) as client:
+        async with httpx.AsyncClient(timeout=900) as client:
             resp = await client.post(
                 f"{self.base_url}/chat/completions",
                 headers={

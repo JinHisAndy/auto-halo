@@ -1,148 +1,168 @@
 # Auto-Halo
 
-[English](README.zh-CN.md)
+> 一键将多篇网页文章抓取 → AI 整合重写 → 自动发布到 Halo 博客。
 
-Auto-Halo 是一个基于 FastAPI 的内容自动化系统，支持：
+Auto-Halo 是面向 Halo CMS 的内容自动化中枢。你给它一个或多个 URL，它就能自动抓取文章正文与图片、调用 AI 将内容重写为技术博客风格、匹配或生成标签，并一键发布到你的 Halo 站点——全程无需手动编辑。
 
-- 通过 UI 或 API 一次创建多个任务块的批量任务
-- 每个任务块可从一个或多个 URL 抓取文章内容
-- 将单个任务块中的多 URL 内容通过 AI 整合成一篇统一文章
-- 保留原始 HTML、图片、音视频与附件
-- 将原始资源上传保存到 MinIO（可选，未配置则使用本地 history 目录）
-- 使用 AI 对文章标题和正文进行重写
-- 在发布前校验重写后的 HTML
-- AI 语义匹配已有 Halo 标签或生成新标签并同步到 Halo
-- 自动提取文章封面图并同步到 Halo
-- 发布到 Halo v2.24
-- 同时支持 UI 创建任务和 API 调用任务
+---
 
-## 功能特性
+**English** | [中文](#-auto-halo)
 
-### 内容抓取
-- HTTP 抓取模式
-- Playwright 浏览器渲染抓取模式
-- 图片、音频、视频、附件提取
-- 基于 Content-Type 的文件类型分类（image/video/audio/attachment）
-- 保留原始富文本 HTML 预览
+> One-click: scrape multiple web articles → AI rewrite & merge → publish to Halo CMS.
 
-### 多任务批量创建
-- 支持在 UI 中一次提交多个彼此独立的任务块
-- API 也支持提交同样的批量任务结构
-- 多个任务块并行处理，互不等待
-- 每个任务块都会作为独立任务记录执行完整流程
+Auto-Halo is a content automation hub built for Halo CMS. Give it one or more URLs, and it automatically fetches article content and images, uses AI to rewrite them in a technical blog style, matches or generates tags, and publishes everything to your Halo site—all hands-free.
 
-### 多URL 内容整合
-- 每个任务块都可以包含多个来源 URL
-- 单任务内抓取并解析多个 URL 的文章内容
-- 通过 AI 将多篇文章整合成一篇逻辑清晰、层次分明的统一文章
-- 一次重写、一次发布
+---
 
-### AI 重写
-- 标题与正文一起重写
-- 更偏技术博客风格的提示词
-- 面向 HTML 的重写链路
-- 多来源整合提示词支持
-- 媒体/代码保留校验
+<p align="center">
+  <a href="#-快速开始">快速开始</a> •
+  <a href="#-核心能力">核心能力</a> •
+  <a href="#-Quick-Start">Quick Start</a> •
+  <a href="#-Key-Features">Key Features</a>
+</p>
 
-### 标签生成与同步
-- AI 语义匹配：先获取 Halo 已有标签，AI 判断哪些可复用
-- 不匹配时 AI 生成有实际含义的新标签（从博客读者角度出发）
-- 标签颜色编码
-- 同步到 Halo v2.24（含 displayName/slug/color 完整映射）
+---
 
-### 发布能力
-- 通过 Halo 核心 API 发布到 v2.24
-- Halo 重名自动改标题/slug 重试
-- 支持立即发布与定时发布
-- 自动提取文章第一张图片作为封面图
-- 已失败任务支持一键重试（从失败阶段继续）
+## 🌏 中文
 
-### 任务流转
-- 通过 UI 或 API 批量创建任务
-- WebSocket 实时进度更新
-- 从失败阶段重试（抓取/解析/重写/发布）
-- 任务列表分页，支持调整每页条数
-- 区分 UI 创建与 API 创建任务
+### 它是做什么的
 
-### 存储选项
-- 可配置 MinIO 对象存储（推荐）
-- 未配置 MinIO 时自动回退到本地 `history/` 目录
-- 未配置 MinIO 时保留原文中的原始图片/音视频链接
+在日常运营技术博客时，你可能会：
 
-### 开放 API
-- 多 Key 支持，含标签和时间戳
-- Key 的增删改查（生成、复制、预览、删除）在设置页操作
-- 认证接口 `POST /open-api/tasks`（`X-API-Key` 请求头）
-- 未传模型时使用全局默认模型
-- 内置 API 文档页 `/open-api/docs`
-- 全部有效 Key 均可通过认证
+- 看到一篇好文章，想用自己的话整理发布到 Halo
+- 看到多篇观点互补的文章，想把它们融合成一篇深度内容
+- 需要批量搬运内容但不想反复手动排版、找图、打标签
 
-### 系统配置
-- 多供应商模型配置（OpenAI、DeepSeek、MiniMax、模力方舟、自定义）
-- 预设模板快速配置供应商
-- 测试连接成功后自动拉取并持久化模型列表
-- 模型标签展示
-- 全局默认模型配置（含供应商/模型下拉选择）
-- MinIO、Halo、模型供应商连接测试
-- MinIO 配置为非必填项
+Auto-Halo 把这些步骤全自动化了。**你只需要粘贴 URL**。
 
-## 技术栈
+### 核心能力
 
-- Python 3.11+
-- FastAPI
-- SQLAlchemy + SQLite
-- Jinja2 + Alpine.js + Tailwind CSS（CDN）
-- MinIO（可选）
-- Playwright
-- Halo v2.24
+- **多 URL 内容整合**：一个任务可以传入多个来源 URL，AI 自动去重、合并、形成逻辑统一的文章
+- **技术博客风格重写**：不是机翻或摘要，而是用技术博主的口吻重写，保留核心事实和观点
+- **图片 / 音视频保留**：自动提取正文中的图片和媒体文件，可上传到 MinIO 做镜像托管
+- **智能标签**：AI 自动匹配 Halo 已有标签，无匹配时生成有实际含义的新标签
+- **定时发布**：支持立即发布或设定未来时间自动发布
+- **失败重试**：任务从失败阶段继续，不需要重新开始
+- **Open API**：提供 REST API 供外部系统调用，支持多 API Key 管理
 
-## 本地运行
+### 为什么选 Auto-Halo
+
+| 对比 | 手动搬运 | Auto-Halo |
+|------|----------|-----------|
+| 多篇文章融合 | 逐篇阅读、手动整理 | AI 自动去重整合 |
+| 图片处理 | 逐张下载、上传、替换 | 自动提取 → MinIO/本地 |
+| 标签整理 | 手动回忆已有标签 | AI 语义匹配 + 生成 |
+| 格式排版 | 逐段校对 | AI 产出排版好的 HTML |
+
+### 快速开始
 
 ```bash
 pip install -r requirements.txt
 python run.py
+# 访问 http://localhost:8808
 ```
 
-默认访问地址：
-
-```text
-http://localhost:8808
-```
-
-## Docker 运行
+或使用 Docker：
 
 ```bash
 docker compose up --build
 ```
 
-## 主要页面
+### 配置
 
-- `/` —— 创建任务（支持多任务块批量创建）
-- `/tasks` —— 任务列表（含分页、进度条、预览）
-- `/settings` —— 系统配置
-- `/open-api/docs` —— 内部 API 文档页
+1. 打开 `/settings` 配置模型供应商（OpenAI / DeepSeek / MiniMax / 模力方舟 / 自定义）
+2. 配置 Halo 站点地址和令牌
+3. （可选）配置 MinIO 镜像存储；不配则使用本地 `history/` 目录
+4. 回到首页创建任务
 
-## Open API 示例
+### 页面
+
+- `/` — 创建任务（支持多任务批量）
+- `/tasks` — 任务列表（进度、预览）
+- `/settings` — 系统配置
+- `/open-api/docs` — Open API 文档
+
+### Open API 示例
 
 ```bash
 curl -X POST "http://localhost:8808/open-api/tasks" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: your-api-key" \
-  -d '{
-    "urls": ["https://example.com/post"],
-    "publish_type": "immediate",
-    "keep_citations": false
-  }'
+  -H "X-API-Key: your-key" \
+  -d '{"urls": ["https://example.com/post"], "publish_type": "immediate"}'
 ```
 
-## 使用说明
+---
 
-- 先在 `/settings` 中配置模型供应商、Halo、Open API Key 和默认模型
-- MinIO 为可选配置，不填则使用本地 `history/` 目录存储
-- 如果使用浏览器抓取模式，请确保已安装 Playwright Chromium
-- 系统使用 SQLite，并会在启动时对已支持的字段变更执行轻量补列
-- 标签会在文章发布前自动同步到 Halo（AI 语义匹配现有标签）
+**如果这个项目对你有帮助，欢迎 Star ⭐**
 
-## 分支说明
+---
 
-当前仓库使用 `master` 作为默认工作分支。
+## 🌍 English
+
+### What It Does
+
+Maintaining a tech blog involves a lot of repetitive work:
+
+- Finding great articles, rewriting them in your own voice
+- Merging multiple sources into one coherent piece
+- Manually downloading images, uploading to storage, replacing URLs
+- Tagging each post by hand
+
+Auto-Halo automates all of this. **Just paste the URLs.**
+
+### Key Features
+
+- **Multi-URL Content Merge**: Feed multiple source URLs per task and let AI deduplicate and unify them into a single coherent article
+- **Technical Blog Rewriting**: Not summarization or translation—AI rewrites content in an authentic tech blogger voice while preserving core facts and opinions
+- **Media Extraction & Mirroring**: Automatically extracts images, video and audio from articles with optional MinIO mirroring
+- **Smart Tagging**: AI semantically matches existing Halo tags; generates meaningful new tags when no match is found
+- **Scheduled Publishing**: Publish immediately or schedule for a future date
+- **Failure Retry**: Tasks resume from the failed stage—no need to restart
+- **Open API**: REST endpoints for external integrations, with multi-key management
+
+### Why Auto-Halo
+
+| Task | Manual | Auto-Halo |
+|------|--------|-----------|
+| Merge multiple articles | Read each, manually combine | AI merges automatically |
+| Handle images | Download, upload, replace URLs one by one | Auto extract → MinIO/local |
+| Tag posts | Remember and type existing tags | AI semantic matching + generation |
+| Format content | Proofread paragraph by paragraph | AI outputs well-formatted HTML |
+
+### Quick Start
+
+```bash
+pip install -r requirements.txt
+python run.py
+# Open http://localhost:8808
+```
+
+Or with Docker:
+
+```bash
+docker compose up --build
+```
+
+### Configuration
+
+1. Open `/settings` to configure your AI provider (OpenAI / DeepSeek / MiniMax / MoFi / Custom)
+2. Set your Halo site URL and API token
+3. (Optional) Configure MinIO for media mirroring; local `history/` directory is used otherwise
+4. Go to the homepage and create a task
+
+### Pages
+
+- `/` — Create tasks (supports batch creation)
+- `/tasks` — Task list (progress, preview)
+- `/settings` — System configuration
+- `/open-api/docs` — Open API documentation
+
+---
+
+**If this project helps you, please Star ⭐**
+
+---
+
+## 技术栈 / Tech Stack
+
+Python 3.11+ · FastAPI · SQLAlchemy + SQLite · Jinja2 · Alpine.js + Tailwind CSS · MinIO (optional) · Playwright · Halo v2.24 · trafilatura · readability-lxml

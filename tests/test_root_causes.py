@@ -329,6 +329,64 @@ def test_wechat_rich_html_backfills_width_and_height_from_picture_page_info_list
     assert img.get("height") == "720"
 
 
+def test_wechat_rich_html_derives_missing_height_from_width_and_ratio():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _extract_wechat_rich_html
+
+    html = '''
+    <html><body>
+      <div id="js_content">
+        <img
+          data-src="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+          data-ratio="0.5"
+        />
+      </div>
+      <script>
+        var picturePageInfoList = [{
+          cdn_url: "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg",
+          width: "1080"
+        }];
+      </script>
+    </body></html>
+    '''
+
+    rich_html = _extract_wechat_rich_html(html, "https://mp.weixin.qq.com/s/example")
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("width") == "1080"
+    assert img.get("height") == "540"
+
+
+def test_wechat_rich_html_derives_missing_width_from_height_and_ratio():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _extract_wechat_rich_html
+
+    html = '''
+    <html><body>
+      <div id="js_content">
+        <img
+          data-src="https://mmbiz.qpic.cn/sz_mmbiz_png/xyz/640?wx_fmt=png&from=appmsg"
+          data-ratio="0.5"
+        />
+      </div>
+      <script>
+        var picturePageInfoList = [{
+          cdn_url: "https://mmbiz.qpic.cn/sz_mmbiz_png/xyz/640?wx_fmt=png&from=appmsg",
+          height: "720"
+        }];
+      </script>
+    </body></html>
+    '''
+
+    rich_html = _extract_wechat_rich_html(html, "https://mp.weixin.qq.com/s/example")
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("height") == "720"
+    assert img.get("width") == "1440"
+
+
 def test_non_wechat_rich_html_does_not_backfill_dimensions_from_picture_page_info_list():
     from bs4 import BeautifulSoup
     from app.services.fetcher.http_fetcher import _process_summary_html

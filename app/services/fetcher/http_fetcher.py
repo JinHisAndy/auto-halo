@@ -43,17 +43,23 @@ def _normalise_media_url(url: str) -> str:
     return (url or "").split("#", 1)[0]
 
 
-def _extract_wechat_picture_page_info(html: str) -> dict[str, tuple[str, str]]:
+def _extract_wechat_picture_page_info(html: str) -> dict[str, dict[str, str]]:
     soup = BeautifulSoup(html, "lxml")
     script_text = "\n".join(tag.get_text("\n", strip=False) for tag in soup.find_all("script"))
-    matches = re.finditer(
-        r'cdn_url\s*[:=]\s*["\'](https://mmbiz\.qpic\.cn/[^"\']+)["\'].*?width\s*[:=]\s*["\']?(\d+)["\']?.*?height\s*[:=]\s*["\']?(\d+)["\']?',
+    entry_pattern = re.finditer(
+        r'cdn_url\s*[:=]\s*["\'](https://mmbiz\.qpic\.cn/[^"\']+)["\'](?P<body>.*?)(?:\}|\])',
         script_text,
         re.IGNORECASE | re.DOTALL,
     )
-    metadata: dict[str, tuple[str, str]] = {}
-    for match in matches:
-        metadata[_normalise_media_url(match.group(1))] = (match.group(2), match.group(3))
+    metadata: dict[str, dict[str, str]] = {}
+    for match in entry_pattern:
+        body = match.group("body")
+        width_match = re.search(r'width\s*[:=]\s*["\']?(\d+)["\']?', body, re.IGNORECASE)
+        height_match = re.search(r'height\s*[:=]\s*["\']?(\d+)["\']?', body, re.IGNORECASE)
+        metadata[_normalise_media_url(match.group(1))] = {
+            "width": width_match.group(1) if width_match else "",
+            "height": height_match.group(1) if height_match else "",
+        }
     return metadata
 
 
@@ -67,10 +73,25 @@ def _backfill_wechat_image_dimensions(rich_html: str, html: str) -> str:
         image_url = _normalise_media_url(img.get("src") or img.get("data-src") or img.get("data-original") or "")
         if not image_url or image_url not in metadata:
             continue
-        width, height = metadata[image_url]
-        if not img.get("width"):
+        width = metadata[image_url].get("width", "")
+        height = metadata[image_url].get("height", "")
+        ratio_raw = img.get("data-ratio") or ""
+
+        if not width and height and ratio_raw:
+            try:
+                width = str(int(round(float(height) / float(ratio_raw))))
+            except (ValueError, ZeroDivisionError):
+                width = ""
+
+        if not height and width and ratio_raw:
+            try:
+                height = str(int(round(float(width) * float(ratio_raw))))
+            except (ValueError, ZeroDivisionError):
+                height = ""
+
+        if width and not img.get("width"):
             img["width"] = width
-        if not img.get("height"):
+        if height and not img.get("height"):
             img["height"] = height
     body = soup.find("body") or soup
     return str(body)

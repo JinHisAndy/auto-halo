@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import os
+import types
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -177,3 +178,247 @@ def test_pipeline_collects_all_url_mappings():
     assert "all_url_mappings: dict[str, str] = {}" in pipeline_source
     assert "all_url_mappings.update(url_mapping)" in pipeline_source
     assert "final_url_mapping = all_url_mappings if all_url_mappings else None" in pipeline_source
+
+
+def test_wechat_js_content_prefers_data_src_images_for_rich_html():
+    from bs4 import BeautifulSoup
+
+    from app.services.fetcher.http_fetcher import _extract_wechat_rich_html
+
+    image_url = "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+    html = f'''
+    <html><body>
+      <div id="js_content">
+        <p>intro</p>
+        <img src="https://example.com/placeholder.gif" data-src="{image_url}" data-type="png" />
+      </div>
+    </body></html>
+    '''
+
+    rich_html = _extract_wechat_rich_html(html, "https://mp.weixin.qq.com/s/example")
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("src") == image_url
+    assert "placeholder.gif" not in img.get("src", "")
+
+
+def test_wechat_media_url_extraction_reads_js_content_image_urls():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    image_url = "https://mmbiz.qpic.cn/sz_mmbiz_jpg/abc/640?wx_fmt=jpeg&from=appmsg"
+    html = f'''
+    <html><body>
+      <img src="https://example.com/outside.jpg" />
+      <div id="js_content">
+        <img src="https://example.com/loading.gif" data-src="{image_url}" />
+      </div>
+    </body></html>
+    '''
+
+    urls = _extract_media_urls(html, "https://mp.weixin.qq.com/s/example")
+
+    assert image_url in urls
+    assert "https://example.com/outside.jpg" not in urls
+
+
+def test_wechat_media_url_extraction_falls_back_to_picture_page_info_list():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    html = '''
+    <html><body>
+      <div id="js_content"><p>only text, no usable image tag</p></div>
+      <script>
+        var picturePageInfoList = [{
+          cdn_url: "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg",
+          width: "1080",
+          height: "720"
+        }];
+      </script>
+    </body></html>
+    '''
+
+    urls = _extract_media_urls(html, "https://mp.weixin.qq.com/s/example")
+
+    assert "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg" in urls
+
+
+def test_non_wechat_media_url_extraction_does_not_use_picture_page_info_list():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    html = '''
+    <html><body>
+      <img src="https://example.com/post-image.png" />
+      <script>
+        var picturePageInfoList = [{
+          cdn_url: "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+        }];
+      </script>
+    </body></html>
+    '''
+
+    urls = _extract_media_urls(html, "https://example.com/post")
+
+    assert "https://example.com/post-image.png" in urls
+    assert "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg" not in urls
+
+
+def test_fetch_http_prefers_wechat_dom_rich_html_when_extractor_drops_images(monkeypatch):
+    from app.services.fetcher import http_fetcher
+
+    class FakeResponse:
+        text = """
+        <html><head><title>Wechat</title></head><body>
+          <div id=\"js_content\"><p>hello</p><img data-src=\"https://mmbiz.qpic.cn/a.png\" /></div>
+        </body></html>
+        """
+
+        def raise_for_status(self):
+            return None
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url):
+            return FakeResponse()
+
+    monkeypatch.setattr(http_fetcher.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(http_fetcher, "_extract_with_trafilatura", lambda *_: ("generic text " * 10, "<p>generic text only</p>"))
+    monkeypatch.setattr(http_fetcher, "_extract_with_wechat_dom_priority", lambda *_: ("wechat text " * 10, '<div><img src="https://mmbiz.qpic.cn/a.png" /></div>'))
+
+    fetched = asyncio.run(http_fetcher.fetch_http("https://mp.weixin.qq.com/s/example"))
+
+    assert "mmbiz.qpic.cn/a.png" in fetched.rich_html
+
+
+def test_wechat_dom_priority_keeps_image_heavy_short_posts():
+    from app.services.fetcher.http_fetcher import _extract_with_wechat_dom_priority
+
+    result = _extract_with_wechat_dom_priority(
+        '<div id="js_content"><img data-src="https://mmbiz.qpic.cn/a.png" /></div>',
+        "https://mp.weixin.qq.com/s/example",
+    )
+
+    assert result is not None
+    text, rich_html = result
+    assert text == ""
+    assert "mmbiz.qpic.cn/a.png" in rich_html
+
+
+def test_wechat_dom_priority_returns_none_without_js_content():
+    from app.services.fetcher.http_fetcher import _extract_with_wechat_dom_priority
+
+    result = _extract_with_wechat_dom_priority(
+        '<html><body><p>generic content</p></body></html>',
+        "https://mp.weixin.qq.com/s/example",
+    )
+
+    assert result is None
+
+
+def test_parser_classifies_direct_media_urls_by_actual_type():
+    ps = parser_service
+
+    assert ps._classify_url("https://example.com/file.mp4?token=1") == "video"
+    assert ps._classify_url("https://example.com/file.mp3?token=1") == "audio"
+    assert ps._classify_url("https://example.com/file.png?token=1") == "image"
+    assert ps._classify_url("https://example.com/download?file=clip.mp4") == "video"
+    assert ps._classify_url("https://example.com/download?file=sound.mp3") == "audio"
+
+
+def test_fetch_browser_prefers_wechat_dom_rich_html_when_extractor_drops_images(monkeypatch):
+    from app.services.fetcher import browser_fetcher
+
+    html = """
+    <html><head><title>Wechat</title></head><body>
+      <div id=\"js_content\"><p>hello</p><img data-src=\"https://mmbiz.qpic.cn/a.png\" /></div>
+    </body></html>
+    """
+
+    class FakePage:
+        async def goto(self, url, wait_until=None, timeout=None):
+            return None
+
+        async def content(self):
+            return html
+
+        async def title(self):
+            return "Wechat"
+
+    class FakeBrowser:
+        async def new_page(self):
+            return FakePage()
+
+        async def close(self):
+            return None
+
+    class FakePlaywright:
+        chromium = types.SimpleNamespace(launch=lambda **kwargs: _fake_launch())
+
+    async def _fake_launch():
+        return FakeBrowser()
+
+    class FakeAsyncPlaywrightContext:
+        async def __aenter__(self):
+            return FakePlaywright()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(
+        sys.modules,
+        "playwright.async_api",
+        types.SimpleNamespace(async_playwright=lambda: FakeAsyncPlaywrightContext()),
+    )
+    monkeypatch.setattr(browser_fetcher, "_extract_with_trafilatura", lambda *_: ("generic text " * 10, "<p>generic text only</p>"))
+    monkeypatch.setattr(browser_fetcher, "_extract_with_wechat_dom_priority", lambda *_: ("wechat text " * 10, '<div><img src="https://mmbiz.qpic.cn/a.png" /></div>'), raising=False)
+
+    fetched = asyncio.run(browser_fetcher.fetch_browser("https://mp.weixin.qq.com/s/example"))
+
+    assert "mmbiz.qpic.cn/a.png" in fetched.rich_html
+
+
+def test_parser_keeps_wechat_image_item_even_when_download_fails(monkeypatch):
+    wechat_image_url = "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url, headers=None):
+            raise RuntimeError("download failed")
+
+    monkeypatch.setattr("app.services.parser.service.httpx.AsyncClient", FakeAsyncClient)
+
+    parsed = asyncio.run(
+        parser_service.parse(
+            FetchedContent(
+                title="t",
+                html_raw=f"<img data-src='{wechat_image_url}' />",
+                text_content="hello",
+                rich_html=f"<img src='{wechat_image_url}' />",
+                media_urls=[wechat_image_url],
+            )
+        )
+    )
+
+    assert len(parsed.media_items) == 1
+    assert parsed.attachment_items == []
+    assert parsed.media_items[0].url == wechat_image_url
+    assert parsed.media_items[0].file_type == "image"
+    assert parsed.media_items[0].filename == "image_000.jpg"
+    assert parsed.media_items[0].local_path == ""

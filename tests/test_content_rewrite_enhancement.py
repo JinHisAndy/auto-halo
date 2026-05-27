@@ -4,6 +4,7 @@ import types
 from datetime import datetime, timezone
 from pathlib import Path
 
+import pytest
 from sqlalchemy import create_engine, text
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -280,5 +281,79 @@ def test_minio_save_original_returns_url_mapping():
 def test_pipeline_replaces_original_urls_with_minio_urls_in_rewritten_content():
     source = Path("app/services/pipeline.py").read_text(encoding="utf-8")
     assert "url_mapping" in source
-    assert "rewritten_body = rewritten_body.replace(original_url, minio_url)" in source
     assert "minio_path, url_mapping = await minio_storage.save_original" in source
+
+
+def test_pipeline_replaces_html_escaped_wechat_image_urls_with_minio_urls():
+    from app.services.pipeline import _replace_media_urls
+
+    original_url = "https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
+    rewritten_body = (
+        '<p><img src="https://mmbiz.qpic.cn/mmbiz_png/abc/640?wx_fmt=png&amp;from=appmsg"></p>'
+    )
+
+    replaced = _replace_media_urls(rewritten_body, {original_url: "https://minio.example.com/article/media/image_001.png"})
+
+    assert "https://minio.example.com/article/media/image_001.png" in replaced
+    assert "mmbiz.qpic.cn" not in replaced
+
+
+def test_pipeline_replaces_plain_media_urls_with_minio_urls():
+    from app.services.pipeline import _replace_media_urls
+
+    original_url = "https://example.com/image.png"
+    rewritten_body = '<p><img src="https://example.com/image.png"></p>'
+
+    replaced = _replace_media_urls(rewritten_body, {original_url: "https://minio.example.com/article/media/image_001.png"})
+
+    assert replaced == '<p><img src="https://minio.example.com/article/media/image_001.png"></p>'
+
+
+def test_pipeline_keeps_original_wechat_image_when_minio_mapping_missing():
+    from app.services.pipeline import _replace_media_urls
+
+    html = '<img src="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&amp;from=appmsg">'
+
+    assert _replace_media_urls(html, {}) == html
+    assert _replace_media_urls(html, None) == html
+
+
+@pytest.mark.asyncio
+async def test_minio_save_original_only_maps_successfully_uploaded_media(tmp_path, monkeypatch):
+    from app.services.storage import minio_client
+
+    media_file = tmp_path / "wechat-image.png"
+    media_file.write_bytes(b"image-bytes")
+
+    parsed_article = types.SimpleNamespace(
+        media_items=[
+            types.SimpleNamespace(
+                url="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg",
+                filename="wechat-image.png",
+                local_path=str(media_file),
+            ),
+            types.SimpleNamespace(
+                url="https://mmbiz.qpic.cn/sz_mmbiz_png/def/640?wx_fmt=png&from=appmsg",
+                filename="missing-image.png",
+                local_path="",
+            ),
+        ],
+        attachment_items=[],
+    )
+
+    async def fake_load_config(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(minio_client, "LOCAL_HISTORY_DIR", str(tmp_path / "history"))
+    monkeypatch.setattr(minio_client.MinioStorage, "_load_config", fake_load_config)
+
+    _, url_mapping = await minio_client.minio_storage.save_original(
+        db_session=None,
+        article_title="wechat-article",
+        html_raw="<img src='https://mmbiz.qpic.cn/example.png'>",
+        parsed_article=parsed_article,
+    )
+
+    copied_file = tmp_path / "history" / "wechat-article" / "media" / "wechat-image.png"
+    assert copied_file.exists()
+    assert url_mapping == {}

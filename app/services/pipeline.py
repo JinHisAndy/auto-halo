@@ -1,5 +1,6 @@
 import json
 import logging
+from html import escape
 from datetime import datetime, timezone
 from bs4 import BeautifulSoup
 from sqlalchemy import select
@@ -19,6 +20,21 @@ MULTI_URL_MERGE_INSTRUCTION = (
     "再按清晰的逻辑结构整合成一篇统一文章，"
     "不要按来源分别输出多篇文章。\n\n"
 )
+
+
+def _replace_media_urls(content: str, url_mapping: dict[str, str] | None = None) -> str:
+    if not content or not url_mapping:
+        return content
+
+    replaced = content
+    for original_url, minio_url in url_mapping.items():
+        replaced = replaced.replace(original_url, minio_url)
+
+        escaped_original_url = escape(original_url, quote=True)
+        if escaped_original_url != original_url:
+            replaced = replaced.replace(escaped_original_url, minio_url)
+
+    return replaced
 
 
 class StageExecutionError(Exception):
@@ -212,9 +228,7 @@ async def _rewrite_from_source(
         rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations)
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
 
-        if url_mapping:
-            for original_url, minio_url in url_mapping.items():
-                rewritten_body = rewritten_body.replace(original_url, minio_url)
+        rewritten_body = _replace_media_urls(rewritten_body, url_mapping)
 
         ok, message = validate_rewritten_html(source_validation_html or rewrite_source, rewritten_body)
         if not ok:

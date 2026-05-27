@@ -3,6 +3,7 @@ __pycache__/
 *.pyo
 .env
 data/
+auto-halo - 副本/
 .vscode/
 .idea/
 *.egg-info/

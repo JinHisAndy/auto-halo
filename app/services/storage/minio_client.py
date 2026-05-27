@@ -76,13 +76,11 @@ class MinioStorage:
                 if item.local_path and os.path.exists(item.local_path):
                     dest = os.path.join(local_folder, "media", item.filename)
                     shutil.copy2(item.local_path, dest)
-                    url_mapping[item.url] = item.url
 
             for item in parsed_article.attachment_items:
                 if item.local_path and os.path.exists(item.local_path):
                     dest = os.path.join(local_folder, "attachments", item.filename)
                     shutil.copy2(item.local_path, dest)
-                    url_mapping[item.url] = item.url
 
             return folder, url_mapping
 

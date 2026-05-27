@@ -37,6 +37,38 @@ def _replace_media_urls(content: str, url_mapping: dict[str, str] | None = None)
     return replaced
 
 
+def _sanitize_unreplaced_media(content: str) -> str:
+    if not content:
+        return content
+
+    soup = BeautifulSoup(content, "html.parser")
+    for img in soup.find_all("img"):
+        src = img.get("src", "")
+        if "mmbiz.qpic.cn" in src:
+            img.decompose()
+
+    for video in soup.find_all("video"):
+        src = video.get("src", "")
+        if "mp.weixin.qq.com" in src or "res.wx.qq.com" in src:
+            video.decompose()
+
+    for audio in soup.find_all("audio"):
+        src = audio.get("src", "")
+        if "mp.weixin.qq.com" in src or "res.wx.qq.com" in src:
+            audio.decompose()
+
+    for a_tag in soup.find_all("a"):
+        href = a_tag.get("href", "")
+        if "mp.weixin.qq.com/mp/readtemplate" in href or "mp.weixin.qq.com/s/" in href:
+            if a_tag.string and a_tag.string.strip() == "[微信视频]":
+                parent = a_tag.parent
+                if parent and parent.name == "figure":
+                    parent.decompose()
+
+    body = soup.find("body") or soup
+    return str(body)
+
+
 class StageExecutionError(Exception):
     def __init__(self, stage: str, original: Exception):
         inner = str(original)
@@ -229,6 +261,7 @@ async def _rewrite_from_source(
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
 
         rewritten_body = _replace_media_urls(rewritten_body, url_mapping)
+        rewritten_body = _sanitize_unreplaced_media(rewritten_body)
 
         ok, message = validate_rewritten_html(source_validation_html or rewrite_source, rewritten_body)
         if not ok:

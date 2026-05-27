@@ -352,8 +352,60 @@ async def test_minio_save_original_only_maps_successfully_uploaded_media(tmp_pat
         article_title="wechat-article",
         html_raw="<img src='https://mmbiz.qpic.cn/example.png'>",
         parsed_article=parsed_article,
-    )
+)
 
     copied_file = tmp_path / "history" / "wechat-article" / "media" / "wechat-image.png"
     assert copied_file.exists()
     assert url_mapping == {}
+
+
+def test_sanitize_removes_unreplaced_wechat_cdn_images():
+    from app.services.pipeline import _sanitize_unreplaced_media
+
+    html = '<p>text</p><img src="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png" /><p>more</p>'
+    result = _sanitize_unreplaced_media(html)
+
+    assert "mmbiz.qpic.cn" not in result
+    assert "text" in result
+    assert "more" in result
+
+
+def test_sanitize_removes_wechat_video_figure_links():
+    from app.services.pipeline import _sanitize_unreplaced_media
+
+    html = '<p>intro</p><figure><a href="https://mp.weixin.qq.com/mp/readtemplate?t=pages/video_admin&vid=abc">[微信视频]</a></figure><p>outro</p>'
+    result = _sanitize_unreplaced_media(html)
+
+    assert "[微信视频]" not in result
+    assert "intro" in result
+    assert "outro" in result
+
+
+def test_sanitize_removes_unreplaced_wechat_video_and_audio_tags():
+    from app.services.pipeline import _sanitize_unreplaced_media
+
+    html = '<video src="https://mp.weixin.qq.com/mp/video.mp4" controls></video><audio src="https://res.wx.qq.com/voice/getvoice?mediaid=abc" controls></audio>'
+    result = _sanitize_unreplaced_media(html)
+
+    assert "video" not in result
+    assert "audio" not in result
+    assert "mp.weixin.qq.com" not in result
+
+
+def test_sanitize_keeps_non_wechat_images():
+    from app.services.pipeline import _sanitize_unreplaced_media
+
+    html = '<img src="https://example.com/photo.jpg" /><img src="https://cdn.example.org/banner.png" />'
+    result = _sanitize_unreplaced_media(html)
+
+    assert "example.com/photo.jpg" in result
+    assert "cdn.example.org/banner.png" in result
+
+
+def test_sanitize_keeps_minio_replaced_images():
+    from app.services.pipeline import _sanitize_unreplaced_media
+
+    html = '<img src="https://minio.example.com/article/media/image_001.png" />'
+    result = _sanitize_unreplaced_media(html)
+
+    assert "minio.example.com" in result

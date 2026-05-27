@@ -164,6 +164,35 @@ class ParserService:
                         f.write(resp.content)
                     item = MediaItem(url=url, file_type=file_type, filename=filename, local_path=tmp_path)
                 except Exception as exc:
+                    # Retry WeChat CDN images with the precise article Referer
+                    if self._looks_like_wechat_image_cdn(url) and article_referer != headers["Referer"]:
+                        try:
+                            retry_headers = dict(headers)
+                            retry_headers["Referer"] = article_referer
+                            retry_headers["Accept"] = "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+                            resp = await client.get(url, headers=retry_headers)
+                            resp.raise_for_status()
+                            content_type_retry = resp.headers.get("content-type", "")
+                            file_type, ext = self._classify_content_type(content_type_retry)
+                            if ext == ".bin":
+                                file_type = self._classify_url(url)
+                                ext = self._extension_from_url(url) or ".bin"
+                                ext = self._normalise_ext(ext)
+                            if ext == ".bin" and file_type == "image":
+                                ext = ".jpg"
+                            filename = f"{file_type}_{idx:03d}{ext}"
+                            tmp_path = os.path.join(tempfile.gettempdir(), f"auto_halo_{filename}")
+                            with open(tmp_path, "wb") as f:
+                                f.write(resp.content)
+                            item = MediaItem(url=url, file_type=file_type, filename=filename, local_path=tmp_path)
+                            if file_type in ("image", "video", "audio"):
+                                media_items.append(item)
+                            else:
+                                attachment_items.append(item)
+                            continue
+                        except Exception:
+                            pass
+
                     file_type = self._classify_url(url)
                     ext = self._extension_from_url(url) or ".bin"
                     ext = self._normalise_ext(ext)

@@ -39,6 +39,43 @@ def _extract_body_html(html: str, url: str) -> str:
     return _preprocess_html(str(body), url)
 
 
+def _normalise_media_url(url: str) -> str:
+    return (url or "").split("#", 1)[0]
+
+
+def _extract_wechat_picture_page_info(html: str) -> dict[str, tuple[str, str]]:
+    soup = BeautifulSoup(html, "lxml")
+    script_text = "\n".join(tag.get_text("\n", strip=False) for tag in soup.find_all("script"))
+    matches = re.finditer(
+        r'cdn_url\s*[:=]\s*["\'](https://mmbiz\.qpic\.cn/[^"\']+)["\'].*?width\s*[:=]\s*["\']?(\d+)["\']?.*?height\s*[:=]\s*["\']?(\d+)["\']?',
+        script_text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    metadata: dict[str, tuple[str, str]] = {}
+    for match in matches:
+        metadata[_normalise_media_url(match.group(1))] = (match.group(2), match.group(3))
+    return metadata
+
+
+def _backfill_wechat_image_dimensions(rich_html: str, html: str) -> str:
+    metadata = _extract_wechat_picture_page_info(html)
+    if not metadata:
+        return rich_html
+
+    soup = BeautifulSoup(rich_html, "lxml")
+    for img in soup.find_all("img"):
+        image_url = _normalise_media_url(img.get("src") or img.get("data-src") or img.get("data-original") or "")
+        if not image_url or image_url not in metadata:
+            continue
+        width, height = metadata[image_url]
+        if not img.get("width"):
+            img["width"] = width
+        if not img.get("height"):
+            img["height"] = height
+    body = soup.find("body") or soup
+    return str(body)
+
+
 def _process_summary_html(summary_html: str, base_url: str) -> str:
     soup = BeautifulSoup(summary_html, "lxml")
     for tag in soup(["script", "style", "nav", "footer", "header", "aside", "noscript"]):
@@ -125,7 +162,8 @@ def _process_summary_html(summary_html: str, base_url: str) -> str:
 
 def _extract_wechat_rich_html(html: str, url: str) -> str:
     body_html = _extract_body_html(html, url)
-    return _process_summary_html(body_html, url)
+    rich_html = _process_summary_html(body_html, url)
+    return _backfill_wechat_image_dimensions(rich_html, html)
 
 
 def _has_meaningful_wechat_content(html: str) -> bool:

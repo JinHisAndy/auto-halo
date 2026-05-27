@@ -302,6 +302,48 @@ def test_wechat_rich_html_preserves_image_metadata_attributes():
     assert img.get("type") == "block"
 
 
+def test_wechat_rich_html_backfills_width_and_height_from_picture_page_info_list():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _extract_wechat_rich_html
+
+    html = '''
+    <html><body>
+      <div id="js_content">
+        <img data-src="https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg" />
+      </div>
+      <script>
+        var picturePageInfoList = [{
+          cdn_url: "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg",
+          width: "1080",
+          height: "720"
+        }];
+      </script>
+    </body></html>
+    '''
+
+    rich_html = _extract_wechat_rich_html(html, "https://mp.weixin.qq.com/s/example")
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("width") == "1080"
+    assert img.get("height") == "720"
+
+
+def test_non_wechat_rich_html_does_not_backfill_dimensions_from_picture_page_info_list():
+    from bs4 import BeautifulSoup
+    from app.services.fetcher.http_fetcher import _process_summary_html
+
+    rich_html = _process_summary_html(
+        '<article><img src="https://example.com/post-image.png" /></article>',
+        "https://example.com/post",
+    )
+    img = BeautifulSoup(rich_html, "lxml").find("img")
+
+    assert img is not None
+    assert img.get("width") is None
+    assert img.get("height") is None
+
+
 def test_non_wechat_summary_html_does_not_gain_wechat_only_attributes():
     from bs4 import BeautifulSoup
     from app.services.fetcher.http_fetcher import _process_summary_html

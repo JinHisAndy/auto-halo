@@ -259,33 +259,36 @@ async def fetch_http(url: str) -> FetchedContent:
 
     text_content = ""
     rich_html = ""
-    wechat_dom_result = _extract_with_wechat_dom_priority(html, url) if _is_wechat_url(url) else None
-    traf_result = None
-    if wechat_dom_result:
-        text_content, rich_html = wechat_dom_result
-        logger.debug("Extracted with WeChat DOM priority: %d chars", len(text_content))
-    else:
-        traf_result = _extract_with_trafilatura(html, url)
 
-    if not wechat_dom_result and traf_result:
-        text_content, clean_html = traf_result
-        if _is_wechat_url(url):
-            wechat_body = _extract_body_html(html, url)
-            wechat_traf = _extract_with_trafilatura(wechat_body, url)
-            if wechat_traf and len(wechat_traf[0]) > len(text_content):
-                text_content, clean_html = wechat_traf
-        rich_html = _process_summary_html(clean_html, url)
-        logger.debug("Extracted with trafilatura: %d chars", len(text_content))
+    if _is_wechat_url(url):
+        wechat_dom_result = _extract_with_wechat_dom_priority(html, url)
+        if wechat_dom_result:
+            text_content, rich_html = wechat_dom_result
+            logger.debug("Extracted with WeChat DOM priority: %d chars", len(text_content))
+        else:
+            traf_result = _extract_with_trafilatura(html, url)
+            if traf_result:
+                text_content, clean_html = traf_result
+                wechat_body = _extract_body_html(html, url)
+                wechat_traf = _extract_with_trafilatura(wechat_body, url)
+                if wechat_traf and len(wechat_traf[0]) > len(text_content):
+                    text_content, clean_html = wechat_traf
+                rich_html = _process_summary_html(clean_html, url)
+                logger.debug("Extracted with trafilatura: %d chars", len(text_content))
+            else:
+                logger.debug("trafilatura returned insufficient content, falling back to readability")
+                title_fb, text_content, summary_html = _extract_with_readability(html, url)
+                title = title_fb or title
+                if len(text_content) < 100:
+                    wechat_body = _extract_body_html(html, url)
+                    wechat_title, wc_text, wc_summary = _extract_with_readability(wechat_body, url)
+                    title = wechat_title or title
+                    text_content = wc_text or text_content
+                    summary_html = wc_summary or summary_html
+                rich_html = _process_summary_html(summary_html, url)
     else:
-        logger.debug("trafilatura returned insufficient content, falling back to readability")
         title_fb, text_content, summary_html = _extract_with_readability(html, url)
         title = title_fb or title
-        if _is_wechat_url(url) and len(text_content) < 100:
-            wechat_body = _extract_body_html(html, url)
-            wechat_title, wc_text, wc_summary = _extract_with_readability(wechat_body, url)
-            title = wechat_title or title
-            text_content = wc_text or text_content
-            summary_html = wc_summary or summary_html
         rich_html = _process_summary_html(summary_html, url)
 
     media_urls = _extract_media_urls(html, url)

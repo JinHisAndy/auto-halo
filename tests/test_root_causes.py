@@ -402,6 +402,34 @@ def test_non_wechat_rich_html_does_not_backfill_dimensions_from_picture_page_inf
     assert img.get("height") is None
 
 
+def test_http_fetcher_preserves_blog_images_in_rich_html(monkeypatch):
+    from app.services.fetcher import http_fetcher
+
+    blog_html = """<html><head><title>My Blog</title></head><body><article><h1>Post</h1><p>Hello world.</p><img src="https://example.com/photo.jpg" /></article></body></html>"""
+
+    class FakeResponse:
+        text = blog_html
+        def raise_for_status(self):
+            return None
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+        async def get(self, url):
+            return FakeResponse()
+
+    monkeypatch.setattr(http_fetcher.httpx, "AsyncClient", FakeAsyncClient)
+
+    fetched = asyncio.run(http_fetcher.fetch_http("https://example.com/post"))
+
+    assert "example.com/photo.jpg" in fetched.rich_html
+    assert "https://example.com/photo.jpg" in fetched.media_urls
+
+
 def test_non_wechat_summary_html_does_not_gain_wechat_only_attributes():
     from bs4 import BeautifulSoup
     from app.services.fetcher.http_fetcher import _process_summary_html

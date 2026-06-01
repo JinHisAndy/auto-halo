@@ -60,8 +60,37 @@ class TaskResponse(BaseModel):
         from_attributes = True
 
 
+class TaskListItem(BaseModel):
+    id: str
+    title: Optional[str]
+    urls: list[str]
+    status: str
+    progress: int
+    stage_detail: str
+    error_msg: Optional[str]
+    keep_citations: bool
+    publish_type: str
+    scheduled_at: Optional[datetime]
+    rewritten_title: Optional[str] = None
+    generated_tags: Optional[list[dict]] = None
+    failed_stage: Optional[str] = None
+    trigger_source: str = "ui"
+    halo_post_id: Optional[str]
+    model_provider: str
+    model_name: str
+    original_content: bool = False
+    rewritten_content: bool = False
+    has_original: bool = False
+    has_rewritten: bool = False
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class TaskListResponse(BaseModel):
-    tasks: list[TaskResponse]
+    tasks: list[TaskListItem]
     total: int = 0
     page: int = 1
     page_size: int = 10

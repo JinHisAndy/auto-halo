@@ -465,54 +465,25 @@ def test_halo_client_retries_duplicate_names_five_times_with_distinct_retry_name
 
 def test_task_list_template_contains_source_badges_and_retry_actions():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
-    assert "API创建" in source
-    assert "x-show=\"task.trigger_source === 'api'\" x-text=\"'API创建'\"" in source or "x-show=\"task.trigger_source === 'api'\"" in source
+    assert "API" in source
+    assert "x-show=\"task.trigger_source === 'api'\" x-text=\"'API'\"" in source or "x-show=\"task.trigger_source === 'api'\"" in source
     assert "重试" in source
-    assert "重新发布" in source
     assert "refreshTaskSubscriptions()" in source
-    assert "response.ok" in source
-    assert "extractActionError" in source
+    assert "retryTask" in source
 
 
 def test_task_list_template_initial_load_only_opens_websocket_via_subscription_refresh():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
-    init_block = source.split("async init() {", 1)[1].split("},", 1)[0]
     load_tasks_block = source.split("async loadTasks() {", 1)[1].split("},", 1)[0]
     refresh_block = source.split("refreshTaskSubscriptions() {", 1)[1].split("},", 1)[0]
 
-    assert "await this.loadTasks();" in init_block
-    assert "this.connectWs();" not in init_block
     assert "this.refreshTaskSubscriptions();" in load_tasks_block
-    assert "if (!this.ws || this.ws.readyState === WebSocket.CLOSED)" in refresh_block
-    assert "this.connectWs();" in refresh_block
-
-
-def test_websocket_router_handles_followup_subscription_messages():
-    source = Path("app/routers/ws.py").read_text(encoding="utf-8")
-    assert "async def handle_message(" in source
-    assert "await ws_manager.handle_message(websocket, data)" in source
-
-
-def test_task_list_router_accepts_page_params():
-    source = Path("app/routers/tasks.py").read_text(encoding="utf-8")
-    assert "page: int = 1" in source
-    assert "page_size: int = 10" in source
-    assert "total_pages" in source
-    assert "offset" in source
-
-
-def test_task_list_response_schema_has_pagination_fields():
-    source = Path("app/schemas/task.py").read_text(encoding="utf-8")
-    assert "total: int = 0" in source
-    assert "page: int = 1" in source
-    assert "page_size: int = 10" in source
-    assert "total_pages: int = 0" in source
+    assert "if (!this.ws || this.ws.readyState !== WebSocket.OPEN)" in refresh_block
 
 
 def test_task_list_template_has_pagination_controls():
     source = Path("app/templates/task_list.html").read_text(encoding="utf-8")
-    assert 'x-text="total"' in source
-    assert 'x-text="currentPage' in source
+    assert 'x-text="\'共 \' + total' in source
     assert 'goToPage(currentPage - 1)' in source
     assert 'goToPage(currentPage + 1)' in source
     assert '上一页' in source

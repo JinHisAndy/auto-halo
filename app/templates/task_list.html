@@ -1,88 +1,80 @@
 {% extends "base.html" %}
 {% block content %}
-<div x-data="taskList()" class="max-w-4xl mx-auto">
-    <h1 class="text-2xl font-bold mb-6">任务列表</h1>
+<div x-data="taskList()" class="max-w-5xl mx-auto">
+    <div class="flex items-center justify-between mb-3">
+        <h1 class="text-lg font-bold text-gray-800">任务列表</h1>
+        <span class="text-xs text-gray-400" x-text="'共 ' + total + ' 条'"></span>
+    </div>
 
-    <div class="space-y-4">
+    <div class="space-y-1.5">
         <template x-for="task in tasks" :key="task.id">
-            <div class="bg-white rounded-lg shadow p-5">
-                <div class="flex items-start justify-between gap-3 mb-2">
-                    <div>
-                        <h3 class="font-semibold text-gray-800" x-text="task.title || '未命名任务'"></h3>
-                        <span class="inline-flex mt-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700"
-                            x-show="task.trigger_source === 'api'"
-                            x-text="'API创建'"></span>
+            <div class="bg-white border rounded px-3 py-2">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2 min-w-0 flex-1">
+                        <span class="text-xs font-medium text-gray-700 truncate" x-text="task.title || '未命名'"></span>
+                        <span class="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-600"
+                            x-show="task.trigger_source === 'api'" x-text="'API'"></span>
+                        <span class="shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-medium"
+                            :class="statusClass(task.status)" x-text="statusLabel(task.status)"></span>
                     </div>
-                    <span class="px-2.5 py-0.5 rounded-full text-xs font-medium"
-                        :class="statusClass(task.status)"
-                        x-text="statusLabel(task.status)"></span>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button x-show="task.has_original" @click="preview(task, 'original')" class="text-[11px] text-indigo-500 hover:text-indigo-700">原文</button>
+                        <button x-show="task.has_rewritten" @click="preview(task, 'rewritten')" class="text-[11px] text-indigo-500 hover:text-indigo-700">重写</button>
+                        <button x-show="task.status === 'failed'" @click="retryTask(task.id)" :disabled="task._retrying" class="text-[11px] text-amber-500 hover:text-amber-700" x-text="task._retrying ? '重试中' : '重试'"></button>
+                        <button @click="deleteTask(task.id)" class="text-[11px] text-red-400 hover:text-red-600">删</button>
+                    </div>
                 </div>
 
-                <div class="w-full bg-gray-200 rounded-full h-2.5 mb-2">
-                    <div class="h-2.5 rounded-full transition-all duration-500"
+                <div class="w-full bg-gray-100 rounded-full h-1 mt-1.5">
+                    <div class="h-1 rounded-full transition-all duration-500"
                         :class="progressColor(task.status)"
                         :style="'width: ' + task.progress + '%'"></div>
                 </div>
 
-                <p class="text-sm text-gray-500 mb-3" x-text="task.stage_detail"></p>
-
-                <div class="flex flex-wrap gap-2 mt-2 mb-3" x-show="task.generated_tags && task.generated_tags.length">
-                    <template x-for="tag in task.generated_tags" :key="tag.name">
-                        <span class="px-2 py-0.5 rounded-full text-xs"
-                            :class="{
-                                'bg-blue-100 text-blue-700': tag.color === 'blue',
-                                'bg-indigo-100 text-indigo-700': tag.color === 'indigo',
-                                'bg-teal-100 text-teal-700': tag.color === 'teal',
-                                'bg-emerald-100 text-emerald-700': tag.color === 'emerald',
-                                'bg-amber-100 text-amber-700': tag.color === 'amber',
-                                'bg-rose-100 text-rose-700': tag.color === 'rose',
-                            }" x-text="tag.name"></span>
+                <div class="flex items-center gap-2 mt-1 text-[10px] text-gray-400">
+                    <span x-text="task.stage_detail"></span>
+                    <template x-if="task.generated_tags && task.generated_tags.length">
+                        <span class="flex items-center gap-1">
+                            <template x-for="tag in task.generated_tags" :key="tag.name">
+                                <span x-text="'#' + tag.name" class="text-[10px] opacity-60"></span>
+                            </template>
+                        </span>
                     </template>
                 </div>
-
-                <div class="flex flex-wrap gap-2 text-sm" x-show="task.status === 'completed' || task.status === 'scheduled' || task.status === 'failed'">
-                    <button @click="preview(task, 'original')" class="text-indigo-600 hover:text-indigo-800" x-show="task.original_content">预览原文</button>
-                    <button @click="preview(task, 'rewritten')" class="text-indigo-600 hover:text-indigo-800" x-show="task.rewritten_content">预览重写稿</button>
-                    <button x-show="task.status === 'failed'" @click="retryTask(task.id)" :disabled="task._retrying" :class="task._retrying ? 'text-gray-400 cursor-not-allowed' : 'text-amber-600 hover:text-amber-800'" x-text="task._retrying ? '重试中...' : '重试'"></button>
-                </div>
-                <button @click="deleteTask(task.id)" class="mt-2 text-xs text-red-500 hover:text-red-700">删除</button>
             </div>
         </template>
 
-        <div x-show="tasks.length === 0" class="text-center text-gray-400 py-12">
-            暂无任务，<a href="/" class="text-indigo-600">创建第一个任务</a>
+        <div x-show="tasks.length === 0" class="text-center text-gray-400 py-8 text-sm">
+            暂无任务，<a href="/" class="text-indigo-500">创建第一个</a>
         </div>
     </div>
 
-    <div x-show="total > pageSize" class="flex items-center justify-between mt-6 pt-4 border-t">
-        <div class="flex items-center gap-2 text-sm text-gray-500">
-            <span>共 <strong x-text="total"></strong> 条</span>
-            <select x-model="pageSize" @change="loadTasks()" class="border rounded px-2 py-1 text-sm">
-                <option value="10">10条/页</option>
-                <option value="20">20条/页</option>
-                <option value="50">50条/页</option>
-            </select>
-        </div>
-        <div class="flex items-center gap-2">
+    <div x-show="total > pageSize" class="flex items-center justify-between mt-3 pt-2 border-t">
+        <select x-model="pageSize" @change="loadTasks()" class="border rounded px-1.5 py-0.5 text-xs">
+            <option value="10">10/页</option>
+            <option value="20">20/页</option>
+            <option value="50">50/页</option>
+        </select>
+        <div class="flex items-center gap-1.5">
             <button @click="goToPage(currentPage - 1)" :disabled="currentPage <= 1"
-                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">上一页</button>
-            <span class="text-sm text-gray-500" x-text="currentPage + ' / ' + totalPages"></span>
+                class="px-2 py-0.5 text-xs border rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">上一页</button>
+            <span class="text-xs text-gray-400" x-text="currentPage + '/' + totalPages"></span>
             <button @click="goToPage(currentPage + 1)" :disabled="currentPage >= totalPages"
-                class="px-3 py-1 text-sm border rounded hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">下一页</button>
+                class="px-2 py-0.5 text-xs border rounded hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed">下一页</button>
         </div>
     </div>
 
     <div x-show="showPreview" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50" @click.self="showPreview=false">
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col">
-            <div class="flex items-center justify-between p-4 border-b">
-                <div class="flex gap-3">
-                    <button @click="preview(currentPreviewTask, 'original')" :class="previewTab==='original' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'" class="pb-1 px-1 text-sm font-medium">原文</button>
-                    <button @click="preview(currentPreviewTask, 'rewritten')" :class="previewTab==='rewritten' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500'" class="pb-1 px-1 text-sm font-medium">重写稿</button>
+        <div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[75vh] flex flex-col">
+            <div class="flex items-center justify-between px-3 py-2 border-b">
+                <div class="flex gap-2">
+                    <button @click="preview(currentPreviewTask, 'original')" :class="previewTab==='original' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400'" class="pb-0.5 px-1 text-xs font-medium">原文</button>
+                    <button @click="preview(currentPreviewTask, 'rewritten')" :class="previewTab==='rewritten' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-400'" class="pb-0.5 px-1 text-xs font-medium">重写稿</button>
                 </div>
-                <button @click="showPreview=false" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
+                <button @click="showPreview=false" class="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
             </div>
-            <div class="p-4 overflow-y-auto flex-1 text-sm text-gray-700" x-show="previewTab==='original'" x-html="previewContent"></div>
-            <div class="p-4 overflow-y-auto flex-1 text-sm text-gray-700 prose max-w-none" x-show="previewTab==='rewritten'" x-html="previewContent"></div>
+            <div class="px-3 py-2 overflow-y-auto flex-1 text-xs text-gray-700" x-show="previewTab==='original'" x-html="previewContent"></div>
+            <div class="px-3 py-2 overflow-y-auto flex-1 text-xs text-gray-700 prose max-w-none" x-show="previewTab==='rewritten'" x-html="previewContent"></div>
         </div>
     </div>
 </div>
@@ -103,6 +95,7 @@ function taskList() {
 
         async init() {
             await this.loadTasks();
+            this.connectWs();
         },
 
         async loadTasks() {
@@ -123,11 +116,7 @@ function taskList() {
         connectWs() {
             const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
             this.ws = new WebSocket(protocol + '//' + location.host + '/ws/tasks');
-
-            this.ws.onopen = () => {
-                this.refreshTaskSubscriptions();
-            };
-
+            this.ws.onopen = () => this.refreshTaskSubscriptions();
             this.ws.onmessage = (event) => {
                 const msg = JSON.parse(event.data);
                 if (msg.type === 'task_update') {
@@ -137,11 +126,7 @@ function taskList() {
                         this.tasks[idx].progress = msg.progress;
                         this.tasks[idx].stage_detail = msg.stage_detail;
                         if (msg.status === 'completed' || msg.status === 'failed') {
-                            fetch(`/api/tasks/${msg.task_id}`)
-                                .then(r => r.json())
-                                .then(updated => {
-                                    if (idx >= 0) this.tasks[idx] = updated;
-                                });
+                            this.loadTasks();
                         }
                     }
                 }
@@ -150,68 +135,51 @@ function taskList() {
 
         refreshTaskSubscriptions() {
             const activeIds = this.tasks.filter(t => !['completed', 'failed'].includes(t.status)).map(t => t.id);
-            if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
-                this.connectWs();
-                return;
-            }
-            if (this.ws.readyState !== WebSocket.OPEN) return;
+            if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             this.ws.send(JSON.stringify({ type: 'subscribe', task_ids: activeIds }));
         },
 
         statusLabel(status) {
-            const map = {
-                fetching: '抓取中', parsing: '解析中', rewriting: '重写中',
-                publishing: '发布中', scheduled: '定时发布中', completed: '已完成', failed: '失败'
-            };
+            const map = { fetching:'抓取', parsing:'解析', rewriting:'重写', publishing:'发布', scheduled:'定时', completed:'完成', failed:'失败' };
             return map[status] || status;
         },
-
-        sourceLabel(source) {
-            const map = {
-                ui: 'UI创建',
-                api: 'API创建'
-            };
-            return map[source] || '未知来源';
-        },
-
         statusClass(status) {
-            const map = {
-                fetching: 'bg-blue-100 text-blue-700', parsing: 'bg-blue-100 text-blue-700',
-                rewriting: 'bg-blue-100 text-blue-700', publishing: 'bg-blue-100 text-blue-700',
-                scheduled: 'bg-orange-100 text-orange-700', completed: 'bg-green-100 text-green-700',
-                failed: 'bg-red-100 text-red-700'
-            };
+            const map = { fetching:'bg-blue-100 text-blue-700', parsing:'bg-blue-100 text-blue-700', rewriting:'bg-blue-100 text-blue-700', publishing:'bg-blue-100 text-blue-700', scheduled:'bg-orange-100 text-orange-700', completed:'bg-green-100 text-green-700', failed:'bg-red-100 text-red-700' };
             return map[status] || 'bg-gray-100 text-gray-700';
         },
-
         progressColor(status) {
-            if (status === 'failed') return 'bg-red-500';
-            if (status === 'completed') return 'bg-green-500';
-            if (status === 'scheduled') return 'bg-orange-500';
-            return 'bg-blue-500';
+            if (status === 'failed') return 'bg-red-400';
+            if (status === 'completed') return 'bg-green-400';
+            if (status === 'scheduled') return 'bg-orange-400';
+            return 'bg-blue-400';
         },
 
-        preview(task, tab) {
+        async preview(task, tab) {
             this.currentPreviewTask = task;
             this.previewTab = tab;
-            if (tab === 'original') {
-                this.previewContent = task.original_content || '';
-            } else {
-                this.previewContent = this.renderPreview(task.rewritten_content || '');
-            }
             this.showPreview = true;
+            try {
+                const resp = await fetch(`/api/tasks/${task.id}`);
+                const full = await resp.json();
+                if (tab === 'original') {
+                    this.previewContent = full.original_content || '';
+                } else {
+                    this.previewContent = this.renderPreview(full.rewritten_content || '');
+                }
+            } catch {
+                this.previewContent = '';
+            }
         },
 
         renderPreview(text) {
             const value = text || '';
             const trimmed = value.trim();
-            const looksLikeHtml = trimmed.startsWith('<') && trimmed.includes('>');
-            if (looksLikeHtml) return value;
+            if (trimmed.startsWith('<') && trimmed.includes('>')) return value;
             return typeof marked !== 'undefined' ? marked.parse(value) : value;
         },
 
         async deleteTask(taskId) {
-            if (!confirm('确认删除此任务？')) return;
+            if (!confirm('确认删除？')) return;
             try {
                 await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
                 this.tasks = this.tasks.filter(t => t.id !== taskId);
@@ -220,55 +188,26 @@ function taskList() {
             }
         },
 
-        async extractActionError(response, fallbackMessage) {
-            try {
-                const data = await response.json();
-                return data.detail || data.message || fallbackMessage;
-            } catch (e) {
-                const text = await response.text();
-                return text || response.statusText || fallbackMessage;
-            }
-        },
-
         async retryTask(taskId) {
             const task = this.tasks.find(t => t.id === taskId);
             if (!task || task._retrying) return;
-            task.status = 'fetching';
-            task.progress = 0;
-            task.stage_detail = '正在重试...';
-            task._retrying = true;
+            task.status = 'fetching'; task.progress = 0; task.stage_detail = '重试中...'; task._retrying = true;
             try {
                 const response = await fetch(`/api/tasks/${taskId}/retry`, { method: 'POST' });
-                if (!response.ok) {
-                    task.status = 'failed';
-                    task._retrying = false;
-                    alert(await this.extractActionError(response, '重试失败'));
-                    return;
-                }
+                if (!response.ok) { task.status = 'failed'; task._retrying = false; return; }
                 this.refreshTaskSubscriptions();
-            } catch {
-                task.status = 'failed';
-                task._retrying = false;
-            }
+            } catch { task.status = 'failed'; task._retrying = false; }
         },
 
         async republishTask(taskId) {
             const task = this.tasks.find(t => t.id === taskId);
             if (!task || task._republishing) return;
-            task.status = 'publishing';
-            task.progress = 0;
-            task._republishing = true;
+            task.status = 'publishing'; task.progress = 0; task._republishing = true;
             try {
                 const response = await fetch(`/api/tasks/${taskId}/republish`, { method: 'POST' });
-                if (!response.ok) {
-                    alert(await this.extractActionError(response, '重新发布失败'));
-                    return;
-                }
+                if (!response.ok) return;
                 await this.loadTasks();
-                this.refreshTaskSubscriptions();
-            } finally {
-                task._republishing = false;
-            }
+            } finally { task._republishing = false; }
         },
     }
 }

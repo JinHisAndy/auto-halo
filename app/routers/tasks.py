@@ -12,6 +12,7 @@ from app.schemas.task import (
     TaskBatchCreateRequest,
     TaskBatchCreateResponse,
     TaskCreate,
+    TaskListItem,
     TaskListResponse,
     TaskResponse,
 )
@@ -136,18 +137,33 @@ async def list_tasks(page: int = 1, page_size: int = 10):
         page_size = 10
 
     async with async_session() as db:
+        from sqlalchemy import func
+        count_result = await db.execute(select(func.count(Task.id)))
+        total = count_result.scalar() or 0
+        total_pages = max(1, (total + page_size - 1) // page_size)
+        offset = (page - 1) * page_size
         result = await db.execute(
-            select(Task).order_by(Task.created_at.desc())
+            select(Task).order_by(Task.created_at.desc()).offset(offset).limit(page_size)
         )
-        all_tasks = list(result.scalars().all())
+        paged_tasks = list(result.scalars().all())
 
-    total = len(all_tasks)
-    total_pages = max(1, (total + page_size - 1) // page_size)
-    offset = (page - 1) * page_size
-    paged_tasks = all_tasks[offset:offset + page_size]
+    items = []
+    for t in paged_tasks:
+        items.append(TaskListItem(
+            id=t.id, title=t.title, urls=list(t.urls or []), status=t.status,
+            progress=t.progress, stage_detail=t.stage_detail, error_msg=t.error_msg,
+            keep_citations=t.keep_citations, publish_type=t.publish_type.value if isinstance(t.publish_type, PublishType) else str(t.publish_type),
+            scheduled_at=t.scheduled_at, rewritten_title=t.rewritten_title,
+            generated_tags=t.generated_tags, failed_stage=t.failed_stage,
+            trigger_source=t.trigger_source, halo_post_id=t.halo_post_id,
+            model_provider=t.model_provider, model_name=t.model_name,
+            original_content=bool(t.original_content), rewritten_content=bool(t.rewritten_content),
+            has_original=bool(t.original_content), has_rewritten=bool(t.rewritten_content),
+            created_at=t.created_at, updated_at=t.updated_at,
+        ))
 
     return TaskListResponse(
-        tasks=[TaskResponse.model_validate(t) for t in paged_tasks],
+        tasks=items,
         total=total,
         page=page,
         page_size=page_size,

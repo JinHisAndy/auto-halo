@@ -20,6 +20,14 @@ from app.schemas.task import (
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
 
 
+def _utc(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _validate_url(url: str):
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -149,17 +157,18 @@ async def list_tasks(page: int = 1, page_size: int = 10):
 
     items = []
     for t in paged_tasks:
+        tags = list(t.generated_tags or [])[:3]
         items.append(TaskListItem(
             id=t.id, title=t.title, urls=list(t.urls or []), status=t.status,
             progress=t.progress, stage_detail=t.stage_detail, error_msg=t.error_msg,
             keep_citations=t.keep_citations, publish_type=t.publish_type.value if isinstance(t.publish_type, PublishType) else str(t.publish_type),
-            scheduled_at=t.scheduled_at, rewritten_title=t.rewritten_title,
-            generated_tags=t.generated_tags, failed_stage=t.failed_stage,
+            scheduled_at=_utc(t.scheduled_at), rewritten_title=t.rewritten_title,
+            generated_tags=tags, failed_stage=t.failed_stage,
             trigger_source=t.trigger_source, halo_post_id=t.halo_post_id,
             model_provider=t.model_provider, model_name=t.model_name,
             original_content=bool(t.original_content), rewritten_content=bool(t.rewritten_content),
             has_original=bool(t.original_content), has_rewritten=bool(t.rewritten_content),
-            created_at=t.created_at, updated_at=t.updated_at,
+            created_at=_utc(t.created_at), updated_at=_utc(t.updated_at),
         ))
 
     return TaskListResponse(
@@ -177,6 +186,9 @@ async def get_task(task_id: str):
         task = result.scalar_one_or_none()
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
+    task.created_at = _utc(task.created_at)
+    task.updated_at = _utc(task.updated_at)
+    task.scheduled_at = _utc(task.scheduled_at)
     return TaskResponse.model_validate(task)
 
 

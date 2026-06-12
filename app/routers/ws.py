@@ -1,9 +1,11 @@
 import json
+import time
 from fastapi import WebSocket, WebSocketDisconnect
 
 class WebSocketManager:
     def __init__(self):
         self._connections: dict[str, list[WebSocket]] = {}
+        self._last_broadcast: dict[str, float] = {}
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -33,6 +35,12 @@ class WebSocketManager:
                 del self._connections[tid]
 
     async def broadcast_task_update(self, task_id: str, status: str, progress: int, stage_detail: str):
+        now = time.monotonic()
+        last = self._last_broadcast.get(task_id, 0)
+        if now - last < 0.1:
+            return
+        self._last_broadcast[task_id] = now
+
         from datetime import datetime, timezone
         message = json.dumps({
             "type": "task_update",

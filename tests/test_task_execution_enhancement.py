@@ -253,6 +253,8 @@ def test_rewriter_providers_preserve_structured_model_output(monkeypatch):
     structured_output = "TITLE: New title\nBODY:\n<p>Hello</p>"
 
     class FakeResponse:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 

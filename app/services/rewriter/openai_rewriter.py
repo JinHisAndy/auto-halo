@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 import httpx
 
 from app.services.rewriter.base import BaseRewriter
@@ -5,8 +8,35 @@ from app.services.rewriter.prompt_builder import build_rewrite_prompt, TAG_SUGGE
 
 __all__ = ["OpenAIRewriter", "build_rewrite_prompt"]
 
+logger = logging.getLogger(__name__)
+
+RETRY_STATUS_CODES = {429, 500, 502, 503, 504}
+MAX_RETRIES = 3
+BASE_DELAY = 2
+
 
 class OpenAIRewriter(BaseRewriter):
+    async def _post_with_retry(self, client: httpx.AsyncClient, url: str, headers: dict, json: dict) -> dict:
+        last_exc = None
+        for attempt in range(MAX_RETRIES + 1):
+            resp = await client.post(url, headers=headers, json=json)
+            if resp.status_code not in RETRY_STATUS_CODES:
+                resp.raise_for_status()
+                return resp.json()
+            last_exc = httpx.HTTPStatusError(
+                f"Server error '{resp.status_code}' for url '{url}'",
+                request=resp.request,
+                response=resp,
+            )
+            if attempt < MAX_RETRIES:
+                delay = BASE_DELAY ** attempt
+                logger.warning(
+                    "LLM API returned %s, retrying in %ss (attempt %s/%s)",
+                    resp.status_code, delay, attempt + 1, MAX_RETRIES,
+                )
+                await asyncio.sleep(delay)
+        raise last_exc
+
     async def list_models(self) -> list[dict]:
         async with httpx.AsyncClient(timeout=30) as client:
             resp = await client.get(
@@ -21,7 +51,8 @@ class OpenAIRewriter(BaseRewriter):
         prompt = build_rewrite_prompt(text, keep_citations)
 
         async with httpx.AsyncClient(timeout=900) as client:
-            resp = await client.post(
+            data = await self._post_with_retry(
+                client,
                 f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
@@ -35,8 +66,6 @@ class OpenAIRewriter(BaseRewriter):
                     "temperature": 0.7,
                 },
             )
-            resp.raise_for_status()
-            data = resp.json()
             return data["choices"][0]["message"]["content"]
 
     async def test_connection(self) -> bool:
@@ -53,7 +82,8 @@ class OpenAIRewriter(BaseRewriter):
             body_text=body_text[:3000],
         )
         async with httpx.AsyncClient(timeout=900) as client:
-            resp = await client.post(
+            data = await self._post_with_retry(
+                client,
                 f"{self.base_url}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
@@ -67,7 +97,5 @@ class OpenAIRewriter(BaseRewriter):
                     "temperature": 0.5,
                 },
             )
-            resp.raise_for_status()
-            data = resp.json()
             content = data["choices"][0]["message"]["content"]
             return [line.strip() for line in content.strip().split("\n") if line.strip()]

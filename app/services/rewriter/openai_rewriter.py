@@ -47,8 +47,8 @@ class OpenAIRewriter(BaseRewriter):
             data = resp.json()
             return [{"id": m["id"], "name": m.get("id", "")} for m in data.get("data", [])]
 
-    async def rewrite(self, text: str, keep_citations: bool = False) -> str:
-        prompt = build_rewrite_prompt(text, keep_citations)
+    async def rewrite(self, text: str, keep_citations: bool = False, urls: list[str] | None = None) -> str:
+        prompt = build_rewrite_prompt(text, keep_citations, urls=urls)
 
         async with httpx.AsyncClient(timeout=900) as client:
             data = await self._post_with_retry(

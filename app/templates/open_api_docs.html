@@ -2,7 +2,10 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     <section class="bg-white rounded-lg shadow p-6 space-y-2">
-        <h1 class="text-2xl font-bold">Open API 使用文档</h1>
+        <div class="flex items-center justify-between">
+            <h1 class="text-2xl font-bold">Open API 使用文档</h1>
+            <a href="/open-api/docs/download" class="text-sm px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">下载 API 手册 (Markdown)</a>
+        </div>
         <p class="text-sm text-gray-600">通过内部开放接口创建任务，并使用 <code class="px-1 py-0.5 bg-gray-100 rounded">X-API-Key</code> 进行鉴权。</p>
     </section>
 
@@ -14,10 +17,25 @@
     <section class="bg-white rounded-lg shadow p-6 space-y-3">
         <h2 class="text-lg font-semibold">POST /open-api/tasks</h2>
         <p class="text-sm text-gray-700">创建一个新的抓取任务。最少提供 <code class="px-1 py-0.5 bg-gray-100 rounded">urls</code>，其余字段按需补充。</p>
+
+        <h3 class="text-md font-semibold mt-4">请求参数</h3>
+        <table class="w-full text-sm border-collapse">
+            <thead><tr class="bg-gray-50"><th class="border px-3 py-1.5 text-left">参数</th><th class="border px-3 py-1.5 text-left">类型</th><th class="border px-3 py-1.5 text-left">必填</th><th class="border px-3 py-1.5 text-left">说明</th></tr></thead>
+            <tbody>
+                <tr><td class="border px-3 py-1.5 font-mono">urls</td><td class="border px-3 py-1.5">string[]</td><td class="border px-3 py-1.5 text-red-500">是</td><td class="border px-3 py-1.5">目标文章 URL 列表</td></tr>
+                <tr><td class="border px-3 py-1.5 font-mono">publish_type</td><td class="border px-3 py-1.5">string</td><td class="border px-3 py-1.5">否</td><td class="border px-3 py-1.5">immediate（默认）或 scheduled</td></tr>
+                <tr><td class="border px-3 py-1.5 font-mono">scheduled_at</td><td class="border px-3 py-1.5">datetime</td><td class="border px-3 py-1.5">条件</td><td class="border px-3 py-1.5">定时发布时间，publish_type=scheduled 时必填</td></tr>
+                <tr><td class="border px-3 py-1.5 font-mono">keep_citations</td><td class="border px-3 py-1.5">boolean</td><td class="border px-3 py-1.5">否</td><td class="border px-3 py-1.5">是否保留原文引用（默认 false）。true 时文章末尾附原文URL；false 时禁止出现原文链接</td></tr>
+                <tr><td class="border px-3 py-1.5 font-mono">model_provider</td><td class="border px-3 py-1.5">string</td><td class="border px-3 py-1.5">否</td><td class="border px-3 py-1.5">AI 模型供应商，需与 model_name 同时提供</td></tr>
+                <tr><td class="border px-3 py-1.5 font-mono">model_name</td><td class="border px-3 py-1.5">string</td><td class="border px-3 py-1.5">否</td><td class="border px-3 py-1.5">AI 模型名称，需与 model_provider 同时提供</td></tr>
+            </tbody>
+        </table>
+
+        <h3 class="text-md font-semibold mt-4">请求示例</h3>
         <pre class="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto text-sm"><code>{
   "urls": ["https://example.com/post"],
   "publish_type": "immediate",
-  "keep_citations": false,
+  "keep_citations": true,
   "model_provider": "openai",
   "model_name": "gpt-4.1"
 }</code></pre>

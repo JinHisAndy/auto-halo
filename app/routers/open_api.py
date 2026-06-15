@@ -2,6 +2,7 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Header, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import ValidationError
 from sqlalchemy import select
 
@@ -171,3 +172,81 @@ async def create_open_api_task(
         trigger_source="api",
         message=f"Task created for {len(payload.urls)} url(s)",
     )
+
+
+API_DOCS_MD = """# Auto-Halo Open API 手册
+
+## 鉴权
+
+所有请求需在 Header 中携带 `X-API-Key`。Key 在系统配置页生成。
+
+```
+X-API-Key: your-api-key
+```
+
+## POST /open-api/tasks
+
+创建内容抓取与重写任务。
+
+### 请求参数
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| urls | string[] | 是 | 目标文章 URL 列表 |
+| publish_type | string | 否 | `immediate`（默认）或 `scheduled` |
+| scheduled_at | datetime | 条件 | publish_type=scheduled 时必填 |
+| keep_citations | boolean | 否 | 是否保留原文引用（默认 false） |
+| model_provider | string | 否 | 模型供应商（与 model_name 同时提供） |
+| model_name | string | 否 | 模型名称（与 model_provider 同时提供） |
+
+### 请求示例
+
+```json
+{
+  "urls": ["https://example.com/post"],
+  "publish_type": "immediate",
+  "keep_citations": false,
+  "model_provider": "openai",
+  "model_name": "gpt-4.1"
+}
+```
+
+### curl 示例
+
+```bash
+curl -X POST "http://localhost:8808/open-api/tasks" \\
+  -H "Content-Type: application/json" \\
+  -H "X-API-Key: your-api-key" \\
+  -d '{
+    "urls": ["https://example.com/post"],
+    "publish_type": "immediate",
+    "keep_citations": false
+  }'
+```
+
+### 响应示例
+
+```json
+{
+  "task_id": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "status": "fetching",
+  "trigger_source": "api",
+  "message": "Task created for 1 url(s)"
+}
+```
+
+### 错误响应
+
+| 状态码 | 说明 |
+|--------|------|
+| 401 | 缺少 X-API-Key |
+| 403 | API Key 无效 |
+| 400 | 参数校验失败 |
+| 503 | 未配置 API Key |
+"""
+
+
+@router.get("/docs/download", response_class=PlainTextResponse)
+async def download_api_docs():
+    return PlainTextResponse(API_DOCS_MD, media_type="text/markdown",
+                             headers={"Content-Disposition": "attachment; filename=auto-halo-api.md"})

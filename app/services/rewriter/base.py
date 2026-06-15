@@ -12,7 +12,7 @@ class BaseRewriter(ABC):
         ...
 
     @abstractmethod
-    async def rewrite(self, text: str, keep_citations: bool = False) -> str:
+    async def rewrite(self, text: str, keep_citations: bool = False, urls: list[str] | None = None) -> str:
         ...
 
     @abstractmethod

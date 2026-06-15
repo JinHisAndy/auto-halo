@@ -235,6 +235,7 @@ async def _rewrite_from_source(
     rewrite_source: str,
     source_validation_html: str | None = None,
     url_mapping: dict[str, str] | None = None,
+    urls: list[str] | None = None,
 ):
     from app.services.rewriter.factory import RewriterFactory
     from app.services.storage.minio_client import minio_storage
@@ -257,7 +258,7 @@ async def _rewrite_from_source(
             provider_cfg.get("base_url", ""),
             model_name,
         )
-        rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations)
+        rewriter_output = await rewriter.rewrite(rewrite_source, keep_citations, urls=urls)
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
 
         rewritten_body = _replace_media_urls(rewritten_body, url_mapping)
@@ -375,6 +376,7 @@ async def _retry_from_parsing(
             rewrite_source=parsed.rich_html or parsed.clean_text,
             source_validation_html=parsed.rich_html,
             url_mapping=url_mapping if url_mapping else None,
+            urls=[url],
         )
     except Exception as e:
         if isinstance(e, StageExecutionError):
@@ -415,6 +417,7 @@ async def _retry_from_rewriting(
         source_title=task.title,
         rewrite_source=task.original_content,
         source_validation_html=task.original_content,
+        urls=list(task.urls or []),
     )
 
 
@@ -729,6 +732,7 @@ async def run_pipeline(
             rewrite_source=rewrite_source,
             source_validation_html=source_validation_html,
             url_mapping=final_url_mapping,
+            urls=urls,
         )
 
     except Exception as e:

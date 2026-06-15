@@ -44,6 +44,9 @@ Auto-Halo 把这些步骤全自动化了。**你只需要粘贴 URL**。
 - **定时发布**：支持立即发布或设定未来时间自动发布
 - **失败重试**：任务从失败阶段继续，不需要重新开始
 - **Open API**：提供 REST API 供外部系统调用，支持多 API Key 管理
+- **用户管理**：管理员/普通用户双角色，Session 登录认证，管理员可增删用户、修改密码
+- **LLM 容错重试**：大模型 API 返回 502/503/504 时自动指数退避重试（最多 3 次）
+- **任务列表实时更新**：WebSocket 去抖推送，毛玻璃现代 UI，不再卡顿
 
 ### 为什么选 Auto-Halo
 
@@ -66,20 +69,24 @@ python run.py
 
 ```bash
 docker compose up --build
+# 访问 http://localhost:48008
 ```
 
 ### 配置
 
-1. 打开 `/settings` 配置模型供应商（OpenAI / DeepSeek / MiniMax / 模力方舟 / 自定义）
-2. 配置 Halo 站点地址和令牌
-3. （可选）配置 MinIO 镜像存储；不配则使用本地 `history/` 目录
-4. 回到首页创建任务
+1. 首次启动自动创建管理员账户 `admin` / `admin123`，请登录后尽快修改密码
+2. 打开 `/settings` 配置模型供应商（OpenAI / DeepSeek / MiniMax / 模力方舟 / 自定义）
+3. 配置 Halo 站点地址和令牌
+4. （可选）配置 MinIO 镜像存储；不配则使用本地 `history/` 目录
+5. 在 `/settings` 用户管理区块可添加普通用户（仅有使用权限，无法修改系统配置）
+6. 回到首页创建任务
 
 ### 页面
 
+- `/login` — 登录页
 - `/` — 创建任务（支持多任务批量）
-- `/tasks` — 任务列表（进度、预览）
-- `/settings` — 系统配置
+- `/tasks` — 任务列表（实时进度、内容预览）
+- `/settings` — 系统配置（仅管理员可见）
 - `/open-api/docs` — Open API 文档
 
 ### Open API 示例
@@ -119,6 +126,9 @@ Auto-Halo automates all of this. **Just paste the URLs.**
 - **Scheduled Publishing**: Publish immediately or schedule for a future date
 - **Failure Retry**: Tasks resume from the failed stage—no need to restart
 - **Open API**: REST endpoints for external integrations, with multi-key management
+- **User Management**: Admin/user roles with session-based login; admin can add/delete users and reset passwords
+- **LLM Fault Tolerance**: Automatic exponential backoff retry (up to 3 times) on 502/503/504 errors
+- **Real-time Task List**: Debounced WebSocket updates with glassmorphism modern UI, no lag
 
 ### Why Auto-Halo
 
@@ -141,20 +151,24 @@ Or with Docker:
 
 ```bash
 docker compose up --build
+# Open http://localhost:48008
 ```
 
 ### Configuration
 
-1. Open `/settings` to configure your AI provider (OpenAI / DeepSeek / MiniMax / MoFi / Custom)
-2. Set your Halo site URL and API token
-3. (Optional) Configure MinIO for media mirroring; local `history/` directory is used otherwise
-4. Go to the homepage and create a task
+1. A default admin account `admin` / `admin123` is created on first launch—change the password promptly
+2. Open `/settings` to configure your AI provider (OpenAI / DeepSeek / MiniMax / MoFi / Custom)
+3. Set your Halo site URL and API token
+4. (Optional) Configure MinIO for media mirroring; local `history/` directory is used otherwise
+5. Use the User Management section in `/settings` to add regular users (use-only, cannot modify system config)
+6. Go to the homepage and create a task
 
 ### Pages
 
+- `/login` — Login page
 - `/` — Create tasks (supports batch creation)
-- `/tasks` — Task list (progress, preview)
-- `/settings` — System configuration
+- `/tasks` — Task list (real-time progress, content preview)
+- `/settings` — System configuration (admin only)
 - `/open-api/docs` — Open API documentation
 
 ---

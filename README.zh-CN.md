@@ -18,6 +18,14 @@ Auto-Halo is a FastAPI-based content automation system that:
 
 ## Features
 
+### User management & authentication
+- admin / user dual-role system with session-based login
+- admin: full access to all pages and system config
+- regular user: create tasks, task list, Open API docs only (use-only)
+- default admin account `admin` / `admin123` auto-created on first launch
+- admin can create/delete users and change passwords from settings UI
+- `/login` page for authentication, logout support
+
 ### Content acquisition
 - HTTP fetch mode
 - Playwright browser-render mode
@@ -43,6 +51,7 @@ Auto-Halo is a FastAPI-based content automation system that:
 - HTML-aware rewrite flow
 - multi-source merge prompt support
 - media/code preservation validation
+- LLM API retry with exponential backoff (2s/4s/8s) on 5xx errors
 
 ### Tag generation and sync
 - AI semantic matching: fetch existing Halo tags first, AI judges which to reuse
@@ -59,9 +68,10 @@ Auto-Halo is a FastAPI-based content automation system that:
 
 ### Task workflow
 - batch task creation from UI or API
-- live progress updates via WebSocket
+- live progress updates via WebSocket (debounced, no UI lag)
 - retry from failed stage (fetching/parsing/rewriting/publishing)
-- paginated task list with adjustable page size
+- paginated task list with adjustable page size and glassmorphism modern styling
+- relative time display (UTC+8 timezone-aware)
 - distinguish UI-created vs API-created tasks
 
 ### Storage options
@@ -115,11 +125,18 @@ http://localhost:8808
 docker compose up --build
 ```
 
+Default URL:
+
+```text
+http://localhost:48008
+```
+
 ## Main Pages
 
+- `/login` — login page
 - `/` — task creation (supports multi-block batch creation)
-- `/tasks` — task list (with pagination, progress bars, preview)
-- `/settings` — system configuration
+- `/tasks` — task list (with pagination, real-time progress, content preview)
+- `/settings` — system configuration (admin only)
 - `/open-api/docs` — internal API documentation page
 
 ## Open API Example
@@ -137,6 +154,7 @@ curl -X POST "http://localhost:8808/open-api/tasks" \
 
 ## Notes
 
+- A default admin `admin` / `admin123` is created on first launch — change the password in `/settings` > User Management
 - Configure model providers, Halo, Open API keys, and default model in `/settings`
 - MinIO is optional — if not configured, local `history/` directory is used instead
 - For browser-mode fetching, make sure Playwright Chromium is installed

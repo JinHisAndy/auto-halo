@@ -132,6 +132,25 @@
                     </div>
                 </template>
             </div>
+</div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">用户管理</h2>
+            <div class="flex gap-2 mb-3">
+                <input type="text" x-model="newUsername" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="用户名">
+                <input type="password" x-model="newPassword" class="flex-1 border rounded px-3 py-2 text-sm" placeholder="密码">
+                <button @click="createUser()" class="text-sm px-3 py-1.5 border rounded hover:bg-gray-50">添加用户</button>
+            </div>
+            <div x-show="userError" x-text="userError" class="text-xs text-red-500 mb-2"></div>
+            <template x-for="(u, idx) in users" :key="u.id">
+                <div class="flex items-center gap-2 border rounded p-2 mb-1">
+                    <span class="text-sm flex-1" x-text="u.username"></span>
+                    <span class="text-xs px-1.5 py-0.5 rounded" :class="u.role === 'admin' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-600'" x-text="u.role === 'admin' ? '管理员' : '普通用户'"></span>
+                    <input type="text" :placeholder="'新密码'" x-model="u._newPassword" class="border rounded px-2 py-1 text-xs w-20">
+                    <button @click="changePassword(u)" class="text-xs text-indigo-500 hover:text-indigo-700">修改</button>
+                    <button @click="deleteUser(u)" class="text-xs text-red-400 hover:text-red-600" x-show="u.role !== 'admin'">删除</button>
+                </div>
+            </template>
         </div>
 
         <button @click="save" class="w-full bg-indigo-600 text-white rounded-lg py-2.5 hover:bg-indigo-700 font-medium" :disabled="saving">
@@ -157,6 +176,10 @@ function settingsPage() {
         saving: false,
         toast: '',
         toastType: 'success',
+        users: [],
+        newUsername: '',
+        newPassword: '',
+        userError: '',
 
         presets: [
             { name: 'DeepSeek', base_url: 'https://api.deepseek.com/v1', api_key: '' },
@@ -179,6 +202,70 @@ function settingsPage() {
             this.defaultModelProvider = cfg.default_model_provider || '';
             this.defaultModelName = cfg.default_model_name || '';
             this.repairDefaultModelSelection();
+            await this.loadUsers();
+        },
+
+        async loadUsers() {
+            try {
+                const resp = await fetch('/api/users');
+                this.users = (await resp.json()).map(u => ({ ...u, _newPassword: '' }));
+            } catch (e) { console.error(e); }
+        },
+
+        async createUser() {
+            this.userError = '';
+            if (!this.newUsername || !this.newPassword) {
+                this.userError = '用户名和密码不能为空';
+                return;
+            }
+            try {
+                const resp = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: this.newUsername, password: this.newPassword }),
+                });
+                if (resp.ok) {
+                    this.newUsername = '';
+                    this.newPassword = '';
+                    await this.loadUsers();
+                    this.showToast('用户已创建', 'success');
+                } else {
+                    const data = await resp.json();
+                    this.userError = data.detail || '创建失败';
+                }
+            } catch (e) { this.userError = '创建失败: ' + e.message; }
+        },
+
+        async changePassword(u) {
+            if (!u._newPassword) return;
+            try {
+                const resp = await fetch(`/api/users/${u.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ password: u._newPassword }),
+                });
+                if (resp.ok) {
+                    u._newPassword = '';
+                    this.showToast('密码已修改', 'success');
+                } else {
+                    const data = await resp.json();
+                    this.showToast(data.detail || '修改失败', 'error');
+                }
+            } catch (e) { this.showToast('修改失败: ' + e.message, 'error'); }
+        },
+
+        async deleteUser(u) {
+            if (!confirm(`确认删除用户 ${u.username}？`)) return;
+            try {
+                const resp = await fetch(`/api/users/${u.id}`, { method: 'DELETE' });
+                if (resp.ok) {
+                    await this.loadUsers();
+                    this.showToast('用户已删除', 'success');
+                } else {
+                    const data = await resp.json();
+                    this.showToast(data.detail || '删除失败', 'error');
+                }
+            } catch (e) { this.showToast('删除失败: ' + e.message, 'error'); }
         },
 
         addProvider() {

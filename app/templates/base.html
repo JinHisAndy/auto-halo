@@ -8,19 +8,35 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="bg-gray-50 min-h-screen" x-data="appShell()">
     <nav class="bg-white shadow-sm border-b">
         {% set current_path = request.url.path %}
         <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-6">
             <a href="/" class="text-xl font-bold text-indigo-600">Auto-Halo</a>
             <a href="/" class="{{ 'text-indigo-600 font-semibold border-b-2 border-indigo-600' if current_path == '/' else 'text-gray-600 hover:text-indigo-600' }}">创建任务</a>
             <a href="/tasks" class="{{ 'text-indigo-600 font-semibold border-b-2 border-indigo-600' if current_path == '/tasks' else 'text-gray-600 hover:text-indigo-600' }}">任务列表</a>
+            {% if request.session.get('role') == 'admin' %}
             <a href="/settings" class="{{ 'text-indigo-600 font-semibold border-b-2 border-indigo-600' if current_path == '/settings' else 'text-gray-600 hover:text-indigo-600' }}">系统配置</a>
+            {% endif %}
             <a href="/open-api/docs" class="{{ 'text-indigo-600 font-semibold border-b-2 border-indigo-600' if current_path == '/open-api/docs' else 'text-gray-600 hover:text-indigo-600' }}">Open API</a>
+            <div class="ml-auto flex items-center gap-3">
+                <span class="text-xs text-gray-500">{{ request.session.get('username', '') }}</span>
+                <button @click="logout()" class="text-xs text-gray-400 hover:text-red-500 transition-colors">退出</button>
+            </div>
         </div>
     </nav>
     <main class="max-w-6xl mx-auto px-4 py-6">
         {% block content %}{% endblock %}
     </main>
+    <script>
+    function appShell() {
+        return {
+            async logout() {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/login';
+            },
+        };
+    }
+    </script>
 </body>
 </html>

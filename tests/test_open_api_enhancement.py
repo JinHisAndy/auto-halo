@@ -10,12 +10,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.modules.setdefault(
     "app.config",
     types.SimpleNamespace(
-        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:", secret_key="test-secret-key")
     ),
 )
 
 from app.schemas.config import ConfigResponse, ConfigSaveRequest
 from app.schemas.open_api import OpenApiTaskCreateRequest, OpenApiTaskCreateResponse
+from conftest import _ensure_logged_in
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
@@ -60,7 +61,9 @@ async def _get_task_count() -> int:
 
 
 def _test_client():
-    return TestClient(app, raise_server_exceptions=True)
+    client = TestClient(app, raise_server_exceptions=True)
+    asyncio.run(_ensure_logged_in(client))
+    return client
 
 
 def test_open_api_task_request_accepts_optional_model_fields():

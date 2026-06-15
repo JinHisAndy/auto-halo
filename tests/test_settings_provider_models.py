@@ -9,13 +9,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.modules.setdefault(
     "app.config",
     types.SimpleNamespace(
-        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:", secret_key="test-secret-key")
     ),
 )
 
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from conftest import _ensure_logged_in
 from app.db import async_session, init_db
 from app.main import app
 from app.models.system_config import SystemConfig
@@ -31,7 +32,9 @@ async def _reset_system_config_table():
 
 
 def _test_client():
-    return TestClient(app, raise_server_exceptions=True)
+    client = TestClient(app, raise_server_exceptions=True)
+    asyncio.run(_ensure_logged_in(client))
+    return client
 
 
 def test_post_config_persists_provider_model_lists_for_refresh():

@@ -3,15 +3,17 @@ import asyncio
 import sys
 import types
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from conftest import _ensure_logged_in
 
 sys.modules.setdefault(
     "app.config",
     types.SimpleNamespace(
-        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:", secret_key="test-secret-key")
     ),
 )
 
@@ -37,7 +39,9 @@ async def _get_tasks():
 
 
 def _test_client():
-    return TestClient(app, raise_server_exceptions=True)
+    client = TestClient(app, raise_server_exceptions=True)
+    asyncio.run(_ensure_logged_in(client))
+    return client
 
 
 def test_task_batch_schema_accepts_multiple_task_blocks():

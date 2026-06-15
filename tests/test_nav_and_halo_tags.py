@@ -13,13 +13,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.modules.setdefault(
     "app.config",
     types.SimpleNamespace(
-        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:", secret_key="test-secret-key")
     ),
 )
 
 from app.main import app
 from app.services.publisher.halo_client import HaloClient
 from app.services.publisher.payloads import build_halo_payload
+from app.db import init_db
+
+
+async def _login_via_api(client: TestClient):
+    await init_db()
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin123"})
+    assert resp.status_code == 200, f"Login failed: {resp.text}"
 
 
 def _test_client():
@@ -43,6 +50,7 @@ def _nav_link_class(html: str, href: str) -> str:
 )
 def test_nav_marks_current_page_active(path, active_href):
     client = _test_client()
+    asyncio.run(_login_via_api(client))
     try:
         response = client.get(path)
     finally:

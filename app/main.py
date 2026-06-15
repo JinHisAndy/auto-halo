@@ -3,9 +3,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from app.config import settings
 from app.db import init_db
-from app.routers import tasks, config, pages, ws, open_api
+from app.routers import tasks, config, pages, ws, open_api, auth
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,6 +25,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Auto-Halo", version="0.1.0", lifespan=lifespan)
 
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+
+app.include_router(auth.router)
 app.include_router(tasks.router)
 app.include_router(config.router)
 app.include_router(open_api.router)

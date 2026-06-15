@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Auto-Halo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div x-data="loginForm()" class="w-full max-w-sm mx-4">
+        <div class="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-gray-100/80 p-8">
+            <div class="text-center mb-6">
+                <h1 class="text-2xl font-bold text-indigo-600">Auto-Halo</h1>
+                <p class="text-sm text-gray-400 mt-1">登录以继续</p>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <input type="text" x-model="username" @keydown.enter="login()"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 transition-colors"
+                        placeholder="请输入用户名" autocomplete="username">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <input type="password" x-model="password" @keydown.enter="login()"
+                        class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 transition-colors"
+                        placeholder="请输入密码" autocomplete="current-password">
+                </div>
+                <div x-show="error" x-text="error" class="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2"></div>
+                <button @click="login()" :disabled="loading"
+                    class="w-full bg-indigo-600 text-white rounded-lg py-2.5 hover:bg-indigo-700 font-medium text-sm transition-colors disabled:opacity-50">
+                    <span x-show="!loading">登 录</span>
+                    <span x-show="loading">登录中...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function loginForm() {
+        return {
+            username: '',
+            password: '',
+            loading: false,
+            error: '',
+
+            async login() {
+                if (!this.username.trim() || !this.password) {
+                    this.error = '请输入用户名和密码';
+                    return;
+                }
+                this.loading = true;
+                this.error = '';
+                try {
+                    const resp = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username: this.username.trim(), password: this.password }),
+                    });
+                    if (resp.ok) {
+                        window.location.href = '/';
+                    } else {
+                        const data = await resp.json();
+                        this.error = data.detail || '登录失败';
+                    }
+                } catch (e) {
+                    this.error = '网络错误: ' + e.message;
+                }
+                this.loading = false;
+            },
+        };
+    }
+    </script>
+</body>
+</html>

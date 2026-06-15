@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.modules.setdefault(
     "app.config",
     types.SimpleNamespace(
-        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:")
+        settings=types.SimpleNamespace(database_url="sqlite+aiosqlite:///:memory:", secret_key="test-secret-key")
     ),
 )
 

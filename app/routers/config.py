@@ -3,11 +3,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
 from app.db import async_session
 from app.models.system_config import SystemConfig
+from app.models.user import require_admin
 from app.schemas.config import (
     ConfigSaveRequest,
     ConfigResponse,
@@ -19,7 +20,7 @@ from app.schemas.config import (
 )
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/config", tags=["config"])
+router = APIRouter(prefix="/api/config", tags=["config"], dependencies=[Depends(require_admin)])
 MASKED_OPEN_API_KEY = "********"
 
 

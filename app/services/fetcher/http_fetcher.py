@@ -11,7 +11,13 @@ from app.services.fetcher.base import FetchedContent
 
 logger = logging.getLogger(__name__)
 
+ANTI_CRAWL_KEYWORDS = ["环境异常", "当前环境异常", "完成验证", "去验证"]
+
 MIN_CONTENT_LENGTH = 50
+
+
+def _detect_anti_crawl(html: str) -> bool:
+    return any(kw in html for kw in ANTI_CRAWL_KEYWORDS)
 
 
 def _is_wechat_url(url: str) -> bool:
@@ -303,6 +309,15 @@ async def fetch_http(url: str) -> FetchedContent:
         resp = await client.get(url)
         resp.raise_for_status()
         html = resp.text
+
+    logger.info("HTTP fetch: status=%s, content_length=%s, url=%s", resp.status_code, len(html), url)
+    if _is_wechat_url(url):
+        anti_crawl = _detect_anti_crawl(html)
+        if anti_crawl:
+            logger.warning(
+                "WeChat anti-crawl detected for %s -- response preview: %s",
+                url, html[:500],
+            )
 
     doc = Document(html)
     title = doc.title()

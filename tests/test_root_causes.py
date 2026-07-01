@@ -452,6 +452,7 @@ def test_http_fetcher_preserves_blog_images_in_rich_html(monkeypatch):
     blog_html = """<html><head><title>My Blog</title></head><body><article><h1>Post</h1><p>Hello world.</p><img src="https://example.com/photo.jpg" /></article></body></html>"""
 
     class FakeResponse:
+        status_code = 200
         text = blog_html
         def raise_for_status(self):
             return None
@@ -492,6 +493,7 @@ def test_fetch_http_prefers_wechat_dom_rich_html_when_extractor_drops_images(mon
     from app.services.fetcher import http_fetcher
 
     class FakeResponse:
+        status_code = 200
         text = """
         <html><head><title>Wechat</title></head><body>
           <div id=\"js_content\"><p>hello</p><img data-src=\"https://mmbiz.qpic.cn/a.png\" /></div>

@@ -453,6 +453,7 @@ def test_http_fetcher_preserves_blog_images_in_rich_html(monkeypatch):
 
     class FakeResponse:
         status_code = 200
+        url = "https://example.com/post"
         text = blog_html
         def raise_for_status(self):
             return None
@@ -494,6 +495,7 @@ def test_fetch_http_prefers_wechat_dom_rich_html_when_extractor_drops_images(mon
 
     class FakeResponse:
         status_code = 200
+        url = "https://mp.weixin.qq.com/s/example"
         text = """
         <html><head><title>Wechat</title></head><body>
           <div id=\"js_content\"><p>hello</p><img data-src=\"https://mmbiz.qpic.cn/a.png\" /></div>

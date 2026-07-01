@@ -11,12 +11,15 @@ from app.services.fetcher.base import FetchedContent
 
 logger = logging.getLogger(__name__)
 
-ANTI_CRAWL_KEYWORDS = ["环境异常", "当前环境异常", "完成验证", "去验证"]
+ANTI_CRAWL_DOMAINS = ["captcha.gtimg.com", "captcha.qq.com"]
+ANTI_CRAWL_KEYWORDS = ["环境异常", "当前环境异常", "完成验证", "去验证", "滑块验证", "拖动下方滑块", "验证码"]
 
 MIN_CONTENT_LENGTH = 50
 
 
-def _detect_anti_crawl(html: str) -> bool:
+def _detect_anti_crawl(html: str, final_url: str = "") -> bool:
+    if any(domain in final_url for domain in ANTI_CRAWL_DOMAINS):
+        return True
     return any(kw in html for kw in ANTI_CRAWL_KEYWORDS)
 
 
@@ -309,14 +312,15 @@ async def fetch_http(url: str) -> FetchedContent:
         resp = await client.get(url)
         resp.raise_for_status()
         html = resp.text
+        final_url = str(resp.url)
 
-    logger.info("HTTP fetch: status=%s, content_length=%s, url=%s", resp.status_code, len(html), url)
+    logger.info("HTTP fetch: status=%s, content_length=%s, url=%s, final_url=%s", resp.status_code, len(html), url, final_url)
     if _is_wechat_url(url):
-        anti_crawl = _detect_anti_crawl(html)
+        anti_crawl = _detect_anti_crawl(html, final_url)
         if anti_crawl:
             logger.warning(
-                "WeChat anti-crawl detected for %s -- response preview: %s",
-                url, html[:500],
+                "WeChat anti-crawl detected for %s (redirected to %s) -- response preview: %s",
+                url, final_url, html[:500],
             )
 
     doc = Document(html)

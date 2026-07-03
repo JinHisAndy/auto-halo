@@ -603,7 +603,7 @@ def test_fetch_browser_prefers_wechat_dom_rich_html_when_extractor_drops_images(
     </body></html>
     """
 
-class FakePage:
+    class FakePage:
         async def goto(self, url, wait_until=None, timeout=None):
             return None
 
@@ -612,17 +612,6 @@ class FakePage:
 
         async def title(self):
             return "Wechat"
-
-        async def route(self, pattern, handler):
-            return None
-
-        async def wait_for_selector(self, selector, timeout=None):
-            if "js_content" in html:
-                return None
-            raise Exception("timeout")
-
-        async def wait_for_timeout(self, ms):
-            return None
 
         async def route(self, pattern, handler):
             return None

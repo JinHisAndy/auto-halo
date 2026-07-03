@@ -1,6 +1,6 @@
 import logging
 import re
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import httpx
 import trafilatura
@@ -11,16 +11,40 @@ from app.services.fetcher.base import FetchedContent
 
 logger = logging.getLogger(__name__)
 
-ANTI_CRAWL_DOMAINS = ["captcha.gtimg.com", "captcha.qq.com"]
-ANTI_CRAWL_KEYWORDS = ["环境异常", "当前环境异常", "完成验证", "去验证", "滑块验证", "拖动下方滑块", "验证码"]
-
+ANTI_CRAWL_DOMAINS = ("captcha.gtimg.com", "captcha.qq.com")
+ANTI_CRAWL_KEYWORDS = (
+    "环境异常",
+    "当前环境异常",
+    "完成验证",
+    "去验证",
+    "滑块验证",
+    "拖动下方滑块",
+    "验证码",
+    "captcha",
+    "tcaptcha",
+    "TencentCaptcha",
+    "drag_ele",
+)
 MIN_CONTENT_LENGTH = 50
 
 
 def _detect_anti_crawl(html: str, final_url: str = "") -> bool:
     if any(domain in final_url for domain in ANTI_CRAWL_DOMAINS):
         return True
-    return any(kw in html for kw in ANTI_CRAWL_KEYWORDS)
+    html_lower = html.lower()
+    return any(kw in html or kw.lower() in html_lower for kw in ANTI_CRAWL_KEYWORDS)
+
+
+def _is_anti_crawl_url(url: str) -> bool:
+    if not url:
+        return False
+    parsed = urlparse(url)
+    netloc = parsed.netloc.lower()
+    path = parsed.path.lower()
+    query = parsed.query.lower()
+    if any(domain in netloc for domain in ANTI_CRAWL_DOMAINS):
+        return True
+    return any(token in path or token in query for token in ("tcaptcha", "captcha", "drag_ele"))
 
 
 def _is_wechat_url(url: str) -> bool:
@@ -148,8 +172,11 @@ def _process_summary_html(summary_html: str, base_url: str) -> str:
 
     for iframe in body.find_all("iframe"):
         data_src = iframe.get("data-src")
-        if data_src and not iframe.get("src"):
-            iframe["src"] = urljoin(base_url, data_src)
+        src = urljoin(base_url, data_src) if data_src else ""
+        if src and _is_anti_crawl_url(src):
+            iframe.decompose()
+        elif src and not iframe.get("src"):
+            iframe["src"] = src
 
     for mp_video in body.find_all("mp-common-videosnap"):
         data_src = mp_video.get("data-src")
@@ -457,7 +484,9 @@ def _extract_media_urls(html: str, base_url: str) -> list[str]:
     for tag in soup.find_all("iframe"):
         src = tag.get("data-src") or tag.get("src")
         if src:
-            urls.add(urljoin(base_url, src))
+            full = urljoin(base_url, src)
+            if not _is_anti_crawl_url(full):
+                urls.add(full)
 
     for tag in soup.find_all("a", href=True):
         href = tag["href"]

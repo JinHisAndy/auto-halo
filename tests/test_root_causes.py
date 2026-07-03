@@ -552,6 +552,38 @@ def test_wechat_dom_priority_returns_none_without_js_content():
     assert result is None
 
 
+def test_wechat_media_extraction_skips_captcha_iframes():
+    from app.services.fetcher.http_fetcher import _extract_media_urls
+
+    urls = _extract_media_urls(
+        '\n        <div id="js_content">\n          <img data-src="https://mmbiz.qpic.cn/a.png" />\n          <iframe src="https://captcha.gtimg.com/static/template/drag_ele.959ffd7b.html"></iframe>\n        </div>\n        ',
+        "https://mp.weixin.qq.com/s/example",
+    )
+
+    assert "https://mmbiz.qpic.cn/a.png" in urls
+    assert all("captcha.gtimg.com" not in url for url in urls)
+
+
+def test_summary_html_removes_captcha_iframes():
+    from app.services.fetcher.http_fetcher import _process_summary_html
+
+    rich_html = _process_summary_html(
+        '\n        <article>\n          <p>content</p>\n          <iframe data-src="https://captcha.gtimg.com/static/template/drag_ele.959ffd7b.html"></iframe>\n        </article>\n        ',
+        "https://mp.weixin.qq.com/s/example",
+    )
+
+    assert "content" in rich_html
+    assert "captcha.gtimg.com" not in rich_html
+
+
+def test_detect_anti_crawl_handles_tencent_captcha_tokens():
+    from app.services.fetcher.http_fetcher import _detect_anti_crawl, _is_anti_crawl_url
+
+    assert _detect_anti_crawl("window.TencentCaptcha = {}; drag_ele", "https://mp.weixin.qq.com/s/example")
+    assert _is_anti_crawl_url("https://captcha.gtimg.com/static/template/drag_ele.959ffd7b.html")
+    assert not _is_anti_crawl_url("https://mmbiz.qpic.cn/a.png")
+
+
 def test_parser_classifies_direct_media_urls_by_actual_type():
     ps = parser_service
 
@@ -571,7 +603,7 @@ def test_fetch_browser_prefers_wechat_dom_rich_html_when_extractor_drops_images(
     </body></html>
     """
 
-    class FakePage:
+class FakePage:
         async def goto(self, url, wait_until=None, timeout=None):
             return None
 
@@ -580,6 +612,26 @@ def test_fetch_browser_prefers_wechat_dom_rich_html_when_extractor_drops_images(
 
         async def title(self):
             return "Wechat"
+
+        async def route(self, pattern, handler):
+            return None
+
+        async def wait_for_selector(self, selector, timeout=None):
+            if "js_content" in html:
+                return None
+            raise Exception("timeout")
+
+        async def wait_for_timeout(self, ms):
+            return None
+
+        async def route(self, pattern, handler):
+            return None
+
+        async def wait_for_selector(self, selector, timeout=None):
+            return True
+
+        async def wait_for_timeout(self, ms):
+            return None
 
     class FakeBrowser:
         async def new_page(self):

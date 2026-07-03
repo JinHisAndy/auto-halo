@@ -8,6 +8,7 @@ from app.services.fetcher.http_fetcher import (
     _extract_with_readability,
     _extract_with_trafilatura,
     _extract_with_wechat_dom_priority,
+    _is_anti_crawl_url,
     _is_wechat_url,
     _process_summary_html,
 )
@@ -19,7 +20,15 @@ async def fetch_browser(url: str) -> FetchedContent:
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
-        await page.goto(url, wait_until="networkidle", timeout=60000)
+        await page.route(
+            "**/*",
+            lambda route: route.abort() if _is_anti_crawl_url(route.request.url) else route.continue_(),
+        )
+        await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        try:
+            await page.wait_for_selector("#js_content", timeout=10000)
+        except Exception:
+            await page.wait_for_timeout(2000)
         html = await page.content()
         title = await page.title()
         await browser.close()

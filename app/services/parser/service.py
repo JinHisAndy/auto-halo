@@ -10,6 +10,7 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.services.fetcher.base import FetchedContent
+from app.services.fetcher.http_fetcher import _is_anti_crawl_url
 
 logger = logging.getLogger(__name__)
 
@@ -139,6 +140,9 @@ class ParserService:
         article_referer = content.source_url or headers["Referer"]
         async with httpx.AsyncClient(timeout=120, follow_redirects=True, headers=headers) as client:
             for idx, url in enumerate(content.media_urls):
+                if _is_anti_crawl_url(url):
+                    logger.debug("Skip anti-crawl media url %s", url)
+                    continue
                 try:
                     req_headers = dict(headers)
                     if self._looks_like_wechat_image_cdn(url):

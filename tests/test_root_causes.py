@@ -696,6 +696,77 @@ def test_fetch_browser_prefers_wechat_dom_rich_html_when_extractor_drops_images(
     assert "mmbiz.qpic.cn/a.png" in fetched.rich_html
 
 
+def test_fetch_browser_retries_when_page_content_hits_navigation_race(monkeypatch):
+    from app.services.fetcher import browser_fetcher
+
+    html = """
+    <html><head><title>Wechat</title></head><body>
+      <div id=\"js_content\"><p>hello</p><img data-src=\"https://mmbiz.qpic.cn/a.png\" /></div>
+    </body></html>
+    """
+
+    class FakePage:
+        def __init__(self):
+            self.content_calls = 0
+
+        async def goto(self, url, wait_until=None, timeout=None):
+            return None
+
+        async def content(self):
+            self.content_calls += 1
+            if self.content_calls == 1:
+                raise Exception("Page.content: Unable to retrieve content because the page is navigating and changing the content.")
+            return html
+
+        async def title(self):
+            return "Wechat"
+
+        async def route(self, pattern, handler):
+            return None
+
+        async def wait_for_selector(self, selector, timeout=None):
+            return True
+
+        async def wait_for_timeout(self, ms):
+            return None
+
+        async def wait_for_load_state(self, state=None, timeout=None):
+            return None
+
+    class FakeBrowser:
+        async def new_page(self):
+            return FakePage()
+
+        async def close(self):
+            return None
+
+    class FakePlaywright:
+        chromium = types.SimpleNamespace(launch=lambda **kwargs: _fake_launch())
+
+    async def _fake_launch():
+        return FakeBrowser()
+
+    class FakeAsyncPlaywrightContext:
+        async def __aenter__(self):
+            return FakePlaywright()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setitem(sys.modules, "playwright", types.ModuleType("playwright"))
+    monkeypatch.setitem(
+        sys.modules,
+        "playwright.async_api",
+        types.SimpleNamespace(async_playwright=lambda: FakeAsyncPlaywrightContext()),
+    )
+    monkeypatch.setattr(browser_fetcher, "_extract_with_trafilatura", lambda *_: ("generic text " * 10, "<p>generic text only</p>"))
+    monkeypatch.setattr(browser_fetcher, "_extract_with_wechat_dom_priority", lambda *_: ("wechat text " * 10, '<div><img src="https://mmbiz.qpic.cn/a.png" /></div>'), raising=False)
+
+    fetched = asyncio.run(browser_fetcher.fetch_browser("https://mp.weixin.qq.com/s/example"))
+
+    assert "mmbiz.qpic.cn/a.png" in fetched.rich_html
+
+
 def test_parser_keeps_wechat_image_item_even_when_download_fails(monkeypatch):
     wechat_image_url = "https://mmbiz.qpic.cn/sz_mmbiz_png/abc/640?wx_fmt=png&from=appmsg"
 

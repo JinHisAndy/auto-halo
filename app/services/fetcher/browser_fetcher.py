@@ -29,7 +29,18 @@ async def fetch_browser(url: str) -> FetchedContent:
             await page.wait_for_selector("#js_content", timeout=10000)
         except Exception:
             await page.wait_for_timeout(2000)
-        html = await page.content()
+        html = ""
+        for attempt in range(3):
+            try:
+                html = await page.content()
+                break
+            except Exception as exc:
+                if "page is navigating and changing the content" not in str(exc).lower() or attempt == 2:
+                    raise
+                try:
+                    await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                except Exception:
+                    await page.wait_for_timeout(1000)
         title = await page.title()
         await browser.close()
 

@@ -31,6 +31,8 @@ MIN_CONTENT_LENGTH = 50
 def _detect_anti_crawl(html: str, final_url: str = "") -> bool:
     if any(domain in final_url for domain in ANTI_CRAWL_DOMAINS):
         return True
+    if _has_meaningful_wechat_content(html):
+        return False
     html_lower = html.lower()
     return any(kw in html or kw.lower() in html_lower for kw in ANTI_CRAWL_KEYWORDS)
 

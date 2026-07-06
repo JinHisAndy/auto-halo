@@ -584,6 +584,46 @@ def test_detect_anti_crawl_handles_tencent_captcha_tokens():
     assert not _is_anti_crawl_url("https://mmbiz.qpic.cn/a.png")
 
 
+def test_fetcher_service_keeps_meaningful_wechat_http_content_despite_captcha_script(monkeypatch):
+    from app.services.fetcher.service import FetcherService
+    from app.services.fetcher.base import FetchedContent
+
+    http_content = FetchedContent(
+        title="Wechat",
+        html_raw='''
+        <html><body>
+          <script>window.TencentCaptcha = function() {};</script>
+          <div id="js_content"><p>real article body</p><img data-src="https://mmbiz.qpic.cn/a.png" /></div>
+        </body></html>
+        ''',
+        text_content="real article body" * 10,
+        rich_html='<div id="js_content"><p>real article body</p><img src="https://mmbiz.qpic.cn/a.png" /></div>',
+        media_urls=["https://mmbiz.qpic.cn/a.png"],
+        source_url="https://mp.weixin.qq.com/s/example",
+    )
+
+    async def fake_fetch_http(url):
+        return http_content
+
+    async def fake_fetch_browser(url):
+        return FetchedContent(
+            title="Browser fallback",
+            html_raw="",
+            text_content="",
+            rich_html="",
+            media_urls=[],
+            source_url=url,
+        )
+
+    monkeypatch.setattr("app.services.fetcher.service.fetch_http", fake_fetch_http)
+    monkeypatch.setattr("app.services.fetcher.service.fetch_browser", fake_fetch_browser)
+
+    fetched = asyncio.run(FetcherService().fetch("https://mp.weixin.qq.com/s/example"))
+
+    assert fetched is http_content
+    assert "real article body" in fetched.text_content
+
+
 def test_parser_classifies_direct_media_urls_by_actual_type():
     ps = parser_service
 

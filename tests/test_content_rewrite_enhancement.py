@@ -149,6 +149,16 @@ def test_html_rewrite_prompt_emphasizes_technical_depth_and_html_preservation():
     assert "BODY:" in prompt
 
 
+def test_build_rewrite_prompt_treats_instruction_prefixed_html_as_html_content():
+    prompt = build_rewrite_prompt(
+        "以下是从多个来源收集的文章内容。请整合后输出。\n\n<article><p>Hello</p><img src='a.jpg' /></article>"
+    )
+
+    assert "HTML 格式" in prompt
+    assert "必须保留的标签和结构" in prompt
+    assert "img、video、audio、source、a、pre、code、table、ul、ol、blockquote" in prompt
+
+
 def test_rewritten_html_validator_rejects_when_original_has_images_but_rewritten_drops_all_images():
     ok, message = validate_rewritten_html(
         "<article><p>Hello</p><img src='a.jpg' /></article>",

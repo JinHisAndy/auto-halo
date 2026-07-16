@@ -67,7 +67,32 @@ def _format_url_list(urls: list[str]) -> str:
 
 def infer_content_format(content: str) -> str:
     stripped = (content or "").strip()
+    if not stripped:
+        return "text"
+
+    html_indicators = (
+        "<article",
+        "<section",
+        "<div",
+        "<p",
+        "<img",
+        "<h1",
+        "<h2",
+        "<h3",
+        "<ul",
+        "<ol",
+        "<table",
+        "<pre",
+        "<code",
+        "<blockquote",
+        "<video",
+        "<audio",
+    )
+
+    lowered = stripped.lower()
     if stripped.startswith("<") and ">" in stripped:
+        return "html"
+    if any(indicator in lowered for indicator in html_indicators):
         return "html"
     return "text"
 

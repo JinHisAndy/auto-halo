@@ -159,6 +159,14 @@ def test_build_rewrite_prompt_treats_instruction_prefixed_html_as_html_content()
     assert "img、video、audio、source、a、pre、code、table、ul、ol、blockquote" in prompt
 
 
+def test_html_rewrite_prompt_allows_media_urls_to_be_replaced_later():
+    prompt = build_rewrite_prompt("<article><p>Hello</p><img src='https://example.com/a.jpg' /></article>")
+
+    assert "媒体标签（如图片、视频、音频）的链接地址可以先保留在标签属性中" in prompt
+    assert "系统会在后续步骤把这些媒体链接替换成 MinIO 地址" in prompt
+    assert "禁止出现任何原文的URL链接地址" not in prompt
+
+
 def test_rewritten_html_validator_rejects_when_original_has_images_but_rewritten_drops_all_images():
     ok, message = validate_rewritten_html(
         "<article><p>Hello</p><img src='a.jpg' /></article>",
@@ -411,3 +419,54 @@ def test_sanitize_keeps_minio_replaced_images():
     result = _sanitize_unreplaced_media(html)
 
     assert "minio.example.com" in result
+
+
+def test_pipeline_restores_missing_images_from_original_html_using_minio_urls():
+    from app.services.pipeline import _restore_missing_media
+
+    original_html = (
+        '<article>'
+        '<p>Intro</p>'
+        '<img src="https://origin.example.com/1.jpg" alt="one" />'
+        '<p>Middle</p>'
+        '<img src="https://origin.example.com/2.jpg" alt="two" />'
+        '</article>'
+    )
+    rewritten_html = '<article><p>Rewritten body</p></article>'
+    url_mapping = {
+        'https://origin.example.com/1.jpg': 'https://minio.example.com/article/media/1.jpg',
+        'https://origin.example.com/2.jpg': 'https://minio.example.com/article/media/2.jpg',
+    }
+
+    restored = _restore_missing_media(original_html, rewritten_html, url_mapping)
+
+    assert restored.count('<img') == 2
+    assert 'https://minio.example.com/article/media/1.jpg' in restored
+    assert 'https://minio.example.com/article/media/2.jpg' in restored
+    assert 'https://origin.example.com/1.jpg' not in restored
+    assert 'https://origin.example.com/2.jpg' not in restored
+
+
+def test_pipeline_restores_only_missing_image_count_and_keeps_existing_images():
+    from app.services.pipeline import _restore_missing_media
+
+    original_html = (
+        '<article>'
+        '<img src="https://origin.example.com/1.jpg" alt="one" />'
+        '<img src="https://origin.example.com/2.jpg" alt="two" />'
+        '<img src="https://origin.example.com/3.jpg" alt="three" />'
+        '</article>'
+    )
+    rewritten_html = '<article><p>Rewritten</p><img src="https://minio.example.com/article/media/1.jpg" /></article>'
+    url_mapping = {
+        'https://origin.example.com/1.jpg': 'https://minio.example.com/article/media/1.jpg',
+        'https://origin.example.com/2.jpg': 'https://minio.example.com/article/media/2.jpg',
+        'https://origin.example.com/3.jpg': 'https://minio.example.com/article/media/3.jpg',
+    }
+
+    restored = _restore_missing_media(original_html, rewritten_html, url_mapping)
+
+    assert restored.count('<img') == 3
+    assert restored.count('https://minio.example.com/article/media/1.jpg') == 1
+    assert 'https://minio.example.com/article/media/2.jpg' in restored
+    assert 'https://minio.example.com/article/media/3.jpg' in restored

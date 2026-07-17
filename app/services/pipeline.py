@@ -69,6 +69,52 @@ def _sanitize_unreplaced_media(content: str) -> str:
     return str(body)
 
 
+def _restore_missing_media(
+    original_html: str,
+    rewritten_html: str,
+    url_mapping: dict[str, str] | None = None,
+) -> str:
+    if not original_html or not rewritten_html:
+        return rewritten_html
+
+    original_soup = BeautifulSoup(original_html, "html.parser")
+    rewritten_soup = BeautifulSoup(rewritten_html, "html.parser")
+
+    original_imgs = original_soup.find_all("img")
+    rewritten_imgs = rewritten_soup.find_all("img")
+    missing_count = len(original_imgs) - len(rewritten_imgs)
+    if missing_count <= 0:
+        return rewritten_html
+
+    restored = 0
+    existing_sources = {img.get("src", "") for img in rewritten_imgs if img.get("src")}
+    container = rewritten_soup.find("body") or rewritten_soup
+
+    for img in original_imgs:
+        src = img.get("src", "")
+        minio_src = (url_mapping or {}).get(src, "")
+        if not minio_src or minio_src in existing_sources:
+            continue
+
+        restored_img = rewritten_soup.new_tag("img")
+        for attr, value in img.attrs.items():
+            if attr == "src":
+                restored_img[attr] = minio_src
+            else:
+                restored_img[attr] = value
+
+        if not restored_img.get("src"):
+            restored_img["src"] = minio_src
+
+        container.append(restored_img)
+        existing_sources.add(minio_src)
+        restored += 1
+        if restored >= missing_count:
+            break
+
+    return str(container)
+
+
 class StageExecutionError(Exception):
     def __init__(self, stage: str, original: Exception):
         inner = str(original)
@@ -262,6 +308,7 @@ async def _rewrite_from_source(
         rewritten_title, rewritten_body = extract_title_and_body(rewriter_output, source_title)
 
         rewritten_body = _replace_media_urls(rewritten_body, url_mapping)
+        rewritten_body = _restore_missing_media(source_validation_html or rewrite_source, rewritten_body, url_mapping)
         rewritten_body = _sanitize_unreplaced_media(rewritten_body)
 
         ok, message = validate_rewritten_html(source_validation_html or rewrite_source, rewritten_body)
